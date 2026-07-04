@@ -1,0 +1,23 @@
+{
+  "name": "tracko",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WorkTrack — multi-tenant SaaS for time tracking, DTR, leave, and payroll",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "dev:api": "npm run start:dev --workspace=api",
+    "dev:web": "npm run dev --workspace=web"
+  },
+  "devDependencies": {
+    "turbo": "^2.8.12"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "npm@10.9.3"
+}

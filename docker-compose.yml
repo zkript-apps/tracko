@@ -1,0 +1,16 @@
+services:
+  mongodb:
+    image: mongo:7
+    container_name: tracko-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: tracko
+      MONGO_INITDB_ROOT_PASSWORD: tracko_dev_password
+      MONGO_INITDB_DATABASE: tracko
+    volumes:
+      - tracko_mongodb_data:/data/db
+
+volumes:
+  tracko_mongodb_data:

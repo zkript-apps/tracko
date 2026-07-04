@@ -1,0 +1,225 @@
+import { betterAuth } from 'better-auth';
+import { mongodbAdapter } from 'better-auth/adapters/mongodb';
+import { createAuthMiddleware, APIError } from 'better-auth/api';
+import { organization } from 'better-auth/plugins';
+import {
+  markInvitationUsed,
+  validateAdminInvitation,
+} from '../admin-invitations/admin-invitations.store';
+import {
+  resolvePlatformRole,
+  validateOrgInvitationForSignup,
+} from '../org-invitations/org-invitations.store';
+import { createBranchAssignment } from '../organizations/branch-assignments.store';
+import { buildAcceptInviteUrl } from '../org-invitations/invite-url';
+import { getMongoClient, getMongoDb } from '../database/mongo';
+import {
+  orgAc,
+  orgInvitationSchema,
+  orgRoles,
+} from './org-roles';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let authInstance: any = null;
+
+export async function createAuth() {
+  if (authInstance) {
+    return authInstance;
+  }
+
+  const db = await getMongoDb();
+  const client = await getMongoClient();
+  const webUrl = process.env.WEB_URL ?? 'http://localhost:3000';
+
+  authInstance = betterAuth({
+    baseURL: process.env.API_URL ?? 'http://localhost:3001',
+    basePath: '/api/auth',
+    secret:
+      process.env.AUTH_SECRET ??
+      'dev-secret-change-in-production-min-32-chars',
+    trustedOrigins: (process.env.TRUSTED_ORIGINS ?? 'http://localhost:3000')
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean),
+    database: mongodbAdapter(db, { client }),
+    emailAndPassword: {
+      enabled: true,
+    },
+    user: {
+      additionalFields: {
+        platformRole: {
+          type: 'string',
+          required: false,
+          defaultValue: 'org_admin',
+          input: false,
+        },
+      },
+    },
+    experimental: {
+      joins: true,
+    },
+    databaseHooks: {
+      user: {
+        create: {
+          before: async (user, ctx) => {
+            const orgInvitationId =
+              typeof ctx?.body?.orgInvitationId === 'string'
+                ? ctx.body.orgInvitationId
+                : undefined;
+
+            if (!orgInvitationId) {
+              return { data: user };
+            }
+
+            const invitation = await validateOrgInvitationForSignup(
+              orgInvitationId,
+              user.email,
+            );
+
+            return {
+              data: {
+                ...user,
+                platformRole: resolvePlatformRole(invitation.role),
+              },
+            };
+          },
+        },
+      },
+    },
+    hooks: {
+      before: createAuthMiddleware(async (ctx) => {
+        if (ctx.path !== '/sign-up/email') {
+          return;
+        }
+
+        const adminToken =
+          typeof ctx.body?.invitationToken === 'string'
+            ? ctx.body.invitationToken
+            : undefined;
+        const orgInvitationId =
+          typeof ctx.body?.orgInvitationId === 'string'
+            ? ctx.body.orgInvitationId
+            : undefined;
+        const email =
+          typeof ctx.body?.email === 'string' ? ctx.body.email : undefined;
+
+        if (adminToken) {
+          try {
+            await validateAdminInvitation(adminToken, email);
+          } catch (error) {
+            throw APIError.from('BAD_REQUEST', {
+              code: 'INVALID_INVITATION',
+              message:
+                error instanceof Error
+                  ? error.message
+                  : 'Invalid invitation token.',
+            });
+          }
+          return;
+        }
+
+        if (orgInvitationId) {
+          try {
+            await validateOrgInvitationForSignup(orgInvitationId, email);
+          } catch (error) {
+            throw APIError.from('BAD_REQUEST', {
+              code: 'INVALID_ORG_INVITATION',
+              message:
+                error instanceof Error
+                  ? error.message
+                  : 'Invalid organization invitation.',
+            });
+          }
+          return;
+        }
+
+        throw APIError.from('BAD_REQUEST', {
+          code: 'INVITATION_REQUIRED',
+          message: 'An invitation is required to create an account.',
+        });
+      }),
+      after: createAuthMiddleware(async (ctx) => {
+        if (ctx.path !== '/sign-up/email') {
+          return;
+        }
+
+        const adminToken =
+          typeof ctx.body?.invitationToken === 'string'
+            ? ctx.body.invitationToken
+            : undefined;
+        const returned = ctx.context.returned;
+
+        if (
+          !adminToken ||
+          !returned ||
+          typeof returned !== 'object' ||
+          !('user' in returned) ||
+          !returned.user ||
+          typeof returned.user !== 'object' ||
+          !('id' in returned.user) ||
+          typeof returned.user.id !== 'string'
+        ) {
+          return;
+        }
+
+        await markInvitationUsed(adminToken, returned.user.id);
+      }),
+    },
+    plugins: [
+      organization({
+        ac: orgAc,
+        roles: orgRoles,
+        allowUserToCreateOrganization: true,
+        creatorRole: 'owner',
+        organizationLimit: 1,
+        sendInvitationEmail: async (data) => {
+          const inviteUrl = buildAcceptInviteUrl(data.id, webUrl);
+          console.log(
+            `[Tracko] Organization invite for ${data.email} (${data.role}): ${inviteUrl}`,
+          );
+        },
+        organizationHooks: {
+          afterAcceptInvitation: async ({ invitation, member, user }) => {
+            const branchId =
+              typeof invitation.branchId === 'string'
+                ? invitation.branchId
+                : undefined;
+
+            if (!branchId) {
+              return;
+            }
+
+            await createBranchAssignment({
+              organizationId: String(invitation.organizationId),
+              userId: user.id,
+              memberId: member.id,
+              branchId,
+              role: member.role,
+            });
+          },
+        },
+        schema: {
+          organization: {
+            additionalFields: {
+              industry: { type: 'string', required: false },
+              timezone: { type: 'string', required: false },
+              address: { type: 'string', required: false },
+              city: { type: 'string', required: false },
+              phone: { type: 'string', required: false },
+              onboardingCompleted: {
+                type: 'boolean',
+                required: false,
+                defaultValue: false,
+              },
+            },
+          },
+          ...orgInvitationSchema,
+        },
+      }),
+    ],
+  });
+
+  return authInstance;
+}
+
+export type Auth = Awaited<ReturnType<typeof createAuth>>;
