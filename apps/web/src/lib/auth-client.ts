@@ -37,3 +37,17 @@ export async function signUpWithOrgInvitation(input: {
     orgInvitationId: input.orgInvitationId,
   });
 }
+
+export async function signUpSuperAdmin(input: {
+  name: string;
+  email: string;
+  password: string;
+  platformBootstrapSecret: string;
+}) {
+  return signUp.email({
+    name: input.name,
+    email: input.email,
+    password: input.password,
+    platformBootstrapSecret: input.platformBootstrapSecret,
+  });
+}

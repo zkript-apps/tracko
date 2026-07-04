@@ -14,8 +14,22 @@ export function isEmployeeRole(role: string | null | undefined): boolean {
   return role === 'employee';
 }
 
-export function getPostInvitePath(role: string): '/dashboard' | '/employee' {
-  return isEmployeeRole(role) ? '/employee' : '/dashboard';
+export function isSuperAdminRole(role: string | null | undefined): boolean {
+  return role === 'super_admin';
+}
+
+export function getPostInvitePath(
+  role: string,
+): '/dashboard' | '/employee' | '/platform' {
+  if (isEmployeeRole(role)) {
+    return '/employee';
+  }
+
+  if (isSuperAdminRole(role)) {
+    return '/platform';
+  }
+
+  return '/dashboard';
 }
 
 export function formatOrgRole(role: string): string {

@@ -6,6 +6,8 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { HealthController } from './health/health.controller';
 import { OrganizationsModule } from './organizations/organizations.module';
+import { EmailModule } from './email/email.module';
+import { PlatformModule } from './platform/platform.module';
 import { TeamModule } from './team/team.module';
 
 @Module({
@@ -15,8 +17,10 @@ import { TeamModule } from './team/team.module';
       envFilePath: ['.env', '../../.env'],
     }),
     AuthModule,
+    EmailModule,
     AdminInvitationsModule,
     OrganizationsModule,
+    PlatformModule,
     TeamModule,
   ],
   controllers: [AppController, HealthController],
