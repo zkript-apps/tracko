@@ -6,35 +6,36 @@ import { useRouter } from 'next/navigation';
 import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
 import { signOut, useSession } from '@/lib/auth-client';
 import { getOnboardingStatus, type OnboardingStatus } from '@/lib/onboarding';
-import { formatOrgRole, isEmployeeRole, isOrgAdminRole } from '@/lib/org-roles';
+import {
+  formatOrgRole,
+  isEmployeeRole,
+  isHrRole,
+  isOrgAdminRole,
+} from '@/lib/org-roles';
 import { getTeamOverview, type TeamOverview } from '@/lib/team';
 
 const modules = [
   {
-    title: 'Time In / Time Out',
-    description: 'Clock events with timestamps and location context.',
-  },
-  {
     title: 'Daily Time Records',
     description: 'Auto-generated DTR summaries ready for HR review.',
+    href: null,
   },
   {
     title: 'Live Location',
     description: 'Monitor field teams and geofence alerts in real time.',
-  },
-  {
-    title: 'Leave Scheduler',
-    description: 'Employee requests with supervisor approvals and balances.',
+    href: null,
   },
   {
     title: 'Payroll',
     description: 'Compute payroll from attendance with overtime and deductions.',
+    href: null,
   },
   {
     title: 'Employee Records',
     description: 'Profiles, documents, and linked attendance history.',
+    href: null,
   },
-];
+] as const;
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -105,6 +106,8 @@ export default function DashboardPage() {
     team?.members.find((member) => member.userId === session.user.id)?.role ??
     'member';
   const isAdmin = team?.currentMember?.canManageTeam ?? isOrgAdminRole(currentRole);
+  const canManageWorkforce =
+    isAdmin || isHrRole(currentRole) || team?.currentMember?.canInviteEmployees;
   const canInviteEmployees = team?.currentMember?.canInviteEmployees ?? false;
   const currentMember = team?.members.find(
     (member) => member.userId === session.user.id,
@@ -130,6 +133,22 @@ export default function DashboardPage() {
             </h1>
           </div>
           <div className="flex items-center gap-3">
+            {canManageWorkforce ? (
+              <>
+                <Link
+                  href="/dashboard/attendance"
+                  className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
+                >
+                  Attendance
+                </Link>
+                <Link
+                  href="/dashboard/leave"
+                  className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
+                >
+                  Leave
+                </Link>
+              </>
+            ) : null}
             {canInviteEmployees ? (
               <Link
                 href="/dashboard/employees"
@@ -170,7 +189,8 @@ export default function DashboardPage() {
                 {onboarding?.organization?.name ?? 'Your organization'} is set up with{' '}
                 {onboarding?.branches.length ?? 0} branch
                 {(onboarding?.branches.length ?? 0) === 1 ? '' : 'es'}. Invite HR
-                managers from the Team page to oversee each branch.
+                managers from the Team page, then monitor attendance and leave
+                from the dashboard.
               </>
             ) : (
               <>
@@ -180,26 +200,44 @@ export default function DashboardPage() {
               </>
             )}
           </p>
-          {isAdmin ? (
-            <Link
-              href="/dashboard/team"
-              className="mt-4 inline-block rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-emerald-400"
-            >
-              Invite HR managers
-            </Link>
-          ) : canInviteEmployees ? (
-            <Link
-              href="/dashboard/employees"
-              className="mt-4 inline-block rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-emerald-400"
-            >
-              Invite employees
-            </Link>
-          ) : null}
+          <div className="mt-4 flex flex-wrap gap-3">
+            {canManageWorkforce ? (
+              <>
+                <Link
+                  href="/dashboard/attendance"
+                  className="inline-block rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-emerald-400"
+                >
+                  View attendance
+                </Link>
+                <Link
+                  href="/dashboard/leave"
+                  className="inline-block rounded-lg border border-emerald-500/40 px-4 py-2 text-sm font-medium text-emerald-300 transition hover:border-emerald-400 hover:text-emerald-200"
+                >
+                  Review leave
+                </Link>
+              </>
+            ) : null}
+            {isAdmin ? (
+              <Link
+                href="/dashboard/team"
+                className="inline-block rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:border-slate-500 hover:text-white"
+              >
+                Invite HR managers
+              </Link>
+            ) : canInviteEmployees ? (
+              <Link
+                href="/dashboard/employees"
+                className="inline-block rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-emerald-400"
+              >
+                Invite employees
+              </Link>
+            ) : null}
+          </div>
         </section>
 
         <section>
           <h2 className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-slate-400">
-            Planned modules
+            Coming soon
           </h2>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {modules.map((module) => (

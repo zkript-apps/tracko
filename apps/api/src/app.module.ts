@@ -9,6 +9,7 @@ import { OrganizationsModule } from './organizations/organizations.module';
 import { EmailModule } from './email/email.module';
 import { PlatformModule } from './platform/platform.module';
 import { TeamModule } from './team/team.module';
+import { WorkforceModule } from './workforce/workforce.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { TeamModule } from './team/team.module';
     OrganizationsModule,
     PlatformModule,
     TeamModule,
+    WorkforceModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

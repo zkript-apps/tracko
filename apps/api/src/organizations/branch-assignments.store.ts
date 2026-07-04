@@ -54,5 +54,13 @@ export async function findAssignmentByUserId(
   userId: string,
 ) {
   const collection = await getCollection();
-  return collection.findOne({ organizationId, userId });
+  const assignments = await collection
+    .find({ organizationId: String(organizationId) })
+    .toArray();
+
+  return (
+    assignments.find(
+      (assignment) => String(assignment.userId) === String(userId),
+    ) ?? null
+  );
 }
