@@ -12,6 +12,7 @@ import {
   approveLeaveRequest,
   formatLeaveStatus,
   formatLeaveType,
+  getLeaveStatusClassName,
   getManagedLeaveRequests,
   rejectLeaveRequest,
   type LeaveRequest,
@@ -210,10 +211,15 @@ export default function LeavePage() {
                     <p className="mt-2 text-sm text-slate-300">
                       {formatLeaveType(request.leaveType)} · {request.startDate} →{' '}
                       {request.endDate}
+                      {request.requestedDays
+                        ? ` · ${request.requestedDays} day(s)`
+                        : ''}
                     </p>
                     <p className="mt-2 text-sm text-slate-500">{request.reason}</p>
                   </div>
-                  <span className="rounded-full bg-slate-800 px-2.5 py-1 text-xs text-emerald-300">
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs ${getLeaveStatusClassName(request.status)}`}
+                  >
                     {formatLeaveStatus(request.status)}
                   </span>
                 </div>

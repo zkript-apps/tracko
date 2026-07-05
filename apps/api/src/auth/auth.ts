@@ -11,6 +11,9 @@ import {
   validateOrgInvitationForSignup,
 } from '../org-invitations/org-invitations.store';
 import { createBranchAssignment } from '../organizations/branch-assignments.store';
+import { createEmployeeProfile } from '../workforce/employees/employee-profiles.store';
+import { ensureBalancesForUser } from '../workforce/employees/leave-balances.store';
+import { todayDateString } from '../workforce/employees/leave-days.util';
 import { buildAcceptInviteUrl } from '../org-invitations/invite-url';
 import { sendOrgInvitationEmail } from '../email/email.client';
 import { getMongoClient, getMongoDb } from '../database/mongo';
@@ -237,6 +240,27 @@ export async function createAuth() {
               branchId,
               role: member.role,
             });
+
+            if (member.role === 'employee') {
+              const today = todayDateString();
+              await createEmployeeProfile({
+                organizationId: String(invitation.organizationId),
+                userId: user.id,
+                memberId: member.id,
+                branchId,
+                employmentType: 'probation',
+                hireDate: today,
+                contractStartDate: today,
+              });
+
+              await ensureBalancesForUser({
+                organizationId: String(invitation.organizationId),
+                userId: user.id,
+                memberId: member.id,
+                branchId,
+                periodYear: new Date().getFullYear(),
+              });
+            }
           },
         },
         schema: {

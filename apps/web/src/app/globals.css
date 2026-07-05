@@ -18,6 +18,30 @@ body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
 
+[data-sonner-toaster][data-sonner-theme='dark'] {
+  --normal-bg: rgb(15 23 42);
+  --normal-bg-hover: rgb(30 41 59);
+  --normal-border: rgb(51 65 85);
+  --normal-border-hover: rgb(71 85 105);
+  --normal-text: rgb(248 250 252);
+
+  --success-bg: rgb(6 24 20);
+  --success-border: rgb(16 185 129 / 0.35);
+  --success-text: rgb(110 231 183);
+
+  --error-bg: rgb(28 15 18);
+  --error-border: rgb(239 68 68 / 0.35);
+  --error-text: rgb(252 165 165);
+
+  --warning-bg: rgb(28 24 8);
+  --warning-border: rgb(245 158 11 / 0.35);
+  --warning-text: rgb(252 211 77);
+
+  --info-bg: rgb(15 23 42);
+  --info-border: rgb(51 65 85);
+  --info-text: rgb(148 163 184);
+}
+
 @keyframes shimmer {
   100% {
     transform: translateX(100%);

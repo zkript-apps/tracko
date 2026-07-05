@@ -7,6 +7,8 @@ export const LEAVE_TYPES = [
   { value: 'unpaid', label: 'Unpaid leave' },
 ] as const;
 
+export const BALANCE_LEAVE_TYPES = ['vacation', 'sick', 'emergency'] as const;
+
 export type LeaveRequest = {
   id: string;
   leaveType: string;
@@ -21,10 +23,30 @@ export type LeaveRequest = {
   reviewedAt: string | null;
   reviewNote: string | null;
   createdAt: string;
+  requestedDays?: number;
+};
+
+export type LeaveBalance = {
+  leaveType: string;
+  periodYear: number;
+  entitledDays: number;
+  usedDays: number;
+  pendingDays: number;
+  availableDays: number;
 };
 
 export async function getMyLeaveRequests(): Promise<LeaveRequest[]> {
   return apiFetch('/leave/requests/me');
+}
+
+export async function getMyLeaveBalances(
+  periodYear?: number,
+): Promise<{ periodYear: number; leaveBalances: LeaveBalance[] }> {
+  const query =
+    periodYear !== undefined
+      ? `?periodYear=${encodeURIComponent(String(periodYear))}`
+      : '';
+  return apiFetch(`/leave/balances/me${query}`);
 }
 
 export async function createLeaveRequest(input: {
@@ -79,4 +101,36 @@ export function formatLeaveType(type: string): string {
 
 export function formatLeaveStatus(status: string): string {
   return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+export function getLeaveStatusClassName(status: string): string {
+  switch (status) {
+    case 'approved':
+      return 'bg-emerald-500/15 text-emerald-300';
+    case 'rejected':
+      return 'bg-red-500/15 text-red-300';
+    case 'pending':
+      return 'bg-amber-500/15 text-amber-300';
+    default:
+      return 'bg-slate-800 text-slate-400';
+  }
+}
+
+export function getSelectableLeaveTypes(balances: LeaveBalance[]) {
+  return LEAVE_TYPES.filter((type) => {
+    if (type.value === 'unpaid') {
+      return true;
+    }
+
+    const isBalanceType = BALANCE_LEAVE_TYPES.includes(
+      type.value as (typeof BALANCE_LEAVE_TYPES)[number],
+    );
+
+    if (!isBalanceType) {
+      return true;
+    }
+
+    const balance = balances.find((item) => item.leaveType === type.value);
+    return (balance?.availableDays ?? 0) > 0;
+  });
 }

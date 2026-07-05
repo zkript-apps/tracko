@@ -1,12 +1,19 @@
 import { Module } from '@nestjs/common';
 import { AttendanceController } from './attendance/attendance.controller';
 import { AttendanceService } from './attendance/attendance.service';
+import { EmployeesController } from './employees/employees.controller';
+import { EmployeesService } from './employees/employees.service';
 import { LeaveController } from './leave/leave.controller';
 import { LeaveService } from './leave/leave.service';
 import { WorkforceContextService } from './workforce-context.service';
 
 @Module({
-  controllers: [AttendanceController, LeaveController],
-  providers: [WorkforceContextService, AttendanceService, LeaveService],
+  controllers: [AttendanceController, LeaveController, EmployeesController],
+  providers: [
+    WorkforceContextService,
+    AttendanceService,
+    LeaveService,
+    EmployeesService,
+  ],
 })
 export class WorkforceModule {}

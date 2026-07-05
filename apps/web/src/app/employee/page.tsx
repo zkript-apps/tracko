@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { signOut, useSession } from '@/lib/auth-client';
@@ -20,8 +21,12 @@ import {
   createLeaveRequest,
   formatLeaveStatus,
   formatLeaveType,
+  getLeaveStatusClassName,
+  getMyLeaveBalances,
   getMyLeaveRequests,
-  LEAVE_TYPES,
+  getSelectableLeaveTypes,
+  BALANCE_LEAVE_TYPES,
+  type LeaveBalance,
   type LeaveRequest,
 } from '@/lib/leave';
 import { getTeamOverview, type TeamOverview } from '@/lib/team';
@@ -54,23 +59,39 @@ export default function EmployeePage() {
   const [team, setTeam] = useState<TeamOverview | null>(null);
   const [attendance, setAttendance] = useState<AttendanceStatus | null>(null);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([]);
   const [leaveType, setLeaveType] = useState<string>('vacation');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [clockLoading, setClockLoading] = useState(false);
   const [leaveLoading, setLeaveLoading] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
+  const selectableLeaveTypes = useMemo(
+    () => getSelectableLeaveTypes(leaveBalances),
+    [leaveBalances],
+  );
+
+  useEffect(() => {
+    if (selectableLeaveTypes.length === 0) {
+      return;
+    }
+
+    if (!selectableLeaveTypes.some((type) => type.value === leaveType)) {
+      setLeaveType(selectableLeaveTypes[0].value);
+    }
+  }, [leaveType, selectableLeaveTypes]);
+
   const loadWorkforceData = useCallback(async () => {
-    const [status, requests] = await Promise.all([
+    const [status, requests, balances] = await Promise.all([
       getMyAttendanceStatus(),
       getMyLeaveRequests(),
+      getMyLeaveBalances(),
     ]);
     setAttendance(status);
     setLeaveRequests(requests);
+    setLeaveBalances(balances.leaveBalances);
   }, []);
 
   useEffect(() => {
@@ -106,8 +127,6 @@ export default function EmployeePage() {
   }, [isPending, loadWorkforceData, router, session]);
 
   async function handleClock(action: 'in' | 'out') {
-    setError(null);
-    setSuccess(null);
     setClockLoading(true);
 
     try {
@@ -115,15 +134,15 @@ export default function EmployeePage() {
 
       if (action === 'in') {
         await clockIn(location);
-        setSuccess('Clocked in successfully.');
+        toast.success('Clocked in successfully.');
       } else {
         await clockOut(location);
-        setSuccess('Clocked out successfully.');
+        toast.success('Clocked out successfully.');
       }
 
       await loadWorkforceData();
     } catch (clockError) {
-      setError(
+      toast.error(
         clockError instanceof Error
           ? clockError.message
           : 'Unable to update attendance.',
@@ -135,17 +154,15 @@ export default function EmployeePage() {
 
   async function handleLeaveSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
-    setSuccess(null);
     setLeaveLoading(true);
 
     try {
       await createLeaveRequest({ leaveType, startDate, endDate, reason });
       setReason('');
-      setSuccess('Leave request submitted.');
+      toast.success('Leave request submitted.');
       await loadWorkforceData();
     } catch (leaveError) {
-      setError(
+      toast.error(
         leaveError instanceof Error
           ? leaveError.message
           : 'Unable to submit leave request.',
@@ -156,16 +173,14 @@ export default function EmployeePage() {
   }
 
   async function handleCancelLeave(id: string) {
-    setError(null);
-    setSuccess(null);
     setCancellingId(id);
 
     try {
       await cancelLeaveRequest(id);
-      setSuccess('Leave request canceled.');
+      toast.success('Leave request canceled.');
       await loadWorkforceData();
     } catch (cancelError) {
-      setError(
+      toast.error(
         cancelError instanceof Error
           ? cancelError.message
           : 'Unable to cancel leave request.',
@@ -210,18 +225,6 @@ export default function EmployeePage() {
       </header>
 
       <main className="mx-auto max-w-3xl space-y-8 px-6 py-10">
-        {error ? (
-          <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">
-            {error}
-          </p>
-        ) : null}
-
-        {success ? (
-          <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
-            {success}
-          </p>
-        ) : null}
-
         <section className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-6">
           <p className="text-xs uppercase tracking-[0.2em] text-emerald-300/80">
             {formatOrgRole('employee')}
@@ -300,23 +303,61 @@ export default function EmployeePage() {
         </section>
 
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+          <h2 className="text-lg font-semibold text-white">Leave balances</h2>
+          <p className="mt-2 text-sm text-slate-400">
+            Available days for this year. Unpaid leave does not use a balance.
+          </p>
+          <div className="mt-6 grid gap-4 sm:grid-cols-3">
+            {BALANCE_LEAVE_TYPES.map((leaveType) => {
+              const balance = leaveBalances.find(
+                (item) => item.leaveType === leaveType,
+              );
+
+              return (
+                <article
+                  key={leaveType}
+                  className="rounded-xl border border-slate-800 bg-slate-950 p-4"
+                >
+                  <p className="text-sm text-slate-400">
+                    {formatLeaveType(leaveType)}
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold text-white">
+                    {balance?.availableDays ?? 0}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {balance?.usedDays ?? 0} used · {balance?.pendingDays ?? 0}{' '}
+                    pending · {balance?.entitledDays ?? 0} total
+                  </p>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
           <h2 className="text-lg font-semibold text-white">Request leave</h2>
-          <form className="mt-6 space-y-4" onSubmit={handleLeaveSubmit}>
-            <label className="block space-y-2">
-              <span className="text-sm text-slate-300">Leave type</span>
-              <select
-                required
-                value={leaveType}
-                onChange={(event) => setLeaveType(event.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
-              >
-                {LEAVE_TYPES.map((type) => (
-                  <option key={type.value} value={type.value}>
-                    {type.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+          {selectableLeaveTypes.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-400">
+              You have no leave balance available. Contact HR if you need to
+              request time off.
+            </p>
+          ) : (
+            <form className="mt-6 space-y-4" onSubmit={handleLeaveSubmit}>
+              <label className="block space-y-2">
+                <span className="text-sm text-slate-300">Leave type</span>
+                <select
+                  required
+                  value={leaveType}
+                  onChange={(event) => setLeaveType(event.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                >
+                  {selectableLeaveTypes.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block space-y-2">
@@ -362,6 +403,7 @@ export default function EmployeePage() {
               Submit leave request
             </LoadingButton>
           </form>
+          )}
         </section>
 
         <section>
@@ -389,7 +431,9 @@ export default function EmployeePage() {
                       </p>
                       <p className="mt-2 text-sm text-slate-500">{request.reason}</p>
                     </div>
-                    <span className="rounded-full bg-slate-800 px-2.5 py-1 text-xs text-emerald-300">
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs ${getLeaveStatusClassName(request.status)}`}
+                    >
                       {formatLeaveStatus(request.status)}
                     </span>
                   </div>

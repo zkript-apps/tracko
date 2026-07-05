@@ -6,6 +6,17 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { getMongoDb } from '../../database/mongo';
+import {
+  confirmApprovedDays,
+  ensureBalancesForUser,
+  isBalanceLeaveType,
+  releasePendingDays,
+  reservePendingDays,
+} from '../employees/leave-balances.store';
+import {
+  countLeaveDays,
+  leavePeriodYear,
+} from '../employees/leave-days.util';
 import { WorkforceContextService } from '../workforce-context.service';
 import {
   createLeaveRequest,
@@ -40,6 +51,7 @@ function serializeLeaveRequest(
     reviewedAt: request.reviewedAt?.toISOString() ?? null,
     reviewNote: request.reviewNote ?? null,
     createdAt: request.createdAt.toISOString(),
+    requestedDays: countLeaveDays(request.startDate, request.endDate),
   };
 }
 
@@ -88,15 +100,63 @@ export class LeaveService {
       throw new BadRequestException('Reason is required.');
     }
 
-    const leaveRequest = await createLeaveRequest({
-      organizationId: context.organizationId,
-      userId: context.userId,
-      branchId: context.branchId!,
-      leaveType: input.leaveType,
-      startDate: input.startDate,
-      endDate: input.endDate,
-      reason: input.reason,
-    });
+    const requestedDays = countLeaveDays(input.startDate, input.endDate);
+    const periodYear = leavePeriodYear(input.startDate);
+
+    if (isBalanceLeaveType(input.leaveType)) {
+      await ensureBalancesForUser({
+        organizationId: context.organizationId,
+        userId: context.userId,
+        memberId: context.memberId,
+        branchId: context.branchId!,
+        periodYear,
+      });
+
+      try {
+        await reservePendingDays({
+          organizationId: context.organizationId,
+          userId: context.userId,
+          leaveType: input.leaveType,
+          periodYear,
+          days: requestedDays,
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Insufficient leave balance.';
+
+        throw new BadRequestException(
+          message === 'Insufficient leave balance.'
+            ? `Insufficient ${input.leaveType.replace('_', ' ')} leave balance. You need ${requestedDays} day(s).`
+            : message,
+        );
+      }
+    }
+
+    let leaveRequest: LeaveRequest;
+
+    try {
+      leaveRequest = await createLeaveRequest({
+        organizationId: context.organizationId,
+        userId: context.userId,
+        branchId: context.branchId!,
+        leaveType: input.leaveType,
+        startDate: input.startDate,
+        endDate: input.endDate,
+        reason: input.reason,
+      });
+    } catch (error) {
+      if (isBalanceLeaveType(input.leaveType)) {
+        await releasePendingDays({
+          organizationId: context.organizationId,
+          userId: context.userId,
+          leaveType: input.leaveType,
+          periodYear,
+          days: requestedDays,
+        });
+      }
+
+      throw error;
+    }
 
     return serializeLeaveRequest(leaveRequest);
   }
@@ -162,6 +222,12 @@ export class LeaveService {
       throw new BadRequestException('This leave request was already reviewed.');
     }
 
+    const requestedDays = countLeaveDays(
+      leaveRequest.startDate,
+      leaveRequest.endDate,
+    );
+    const periodYear = leavePeriodYear(leaveRequest.startDate);
+
     const updated = await updateLeaveRequestStatus({
       id,
       status: action === 'approve' ? 'approved' : 'rejected',
@@ -171,6 +237,26 @@ export class LeaveService {
 
     if (!updated) {
       throw new NotFoundException('Leave request not found.');
+    }
+
+    if (isBalanceLeaveType(leaveRequest.leaveType)) {
+      if (action === 'approve') {
+        await confirmApprovedDays({
+          organizationId: leaveRequest.organizationId,
+          userId: leaveRequest.userId,
+          leaveType: leaveRequest.leaveType,
+          periodYear,
+          days: requestedDays,
+        });
+      } else {
+        await releasePendingDays({
+          organizationId: leaveRequest.organizationId,
+          userId: leaveRequest.userId,
+          leaveType: leaveRequest.leaveType,
+          periodYear,
+          days: requestedDays,
+        });
+      }
     }
 
     return serializeLeaveRequest(updated);
@@ -188,6 +274,12 @@ export class LeaveService {
       throw new BadRequestException('Only pending requests can be canceled.');
     }
 
+    const requestedDays = countLeaveDays(
+      leaveRequest.startDate,
+      leaveRequest.endDate,
+    );
+    const periodYear = leavePeriodYear(leaveRequest.startDate);
+
     const updated = await updateLeaveRequestStatus({
       id,
       status: 'canceled',
@@ -196,6 +288,16 @@ export class LeaveService {
 
     if (!updated) {
       throw new NotFoundException('Leave request not found.');
+    }
+
+    if (isBalanceLeaveType(leaveRequest.leaveType)) {
+      await releasePendingDays({
+        organizationId: leaveRequest.organizationId,
+        userId: leaveRequest.userId,
+        leaveType: leaveRequest.leaveType,
+        periodYear,
+        days: requestedDays,
+      });
     }
 
     return serializeLeaveRequest(updated);

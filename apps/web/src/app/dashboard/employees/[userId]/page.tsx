@@ -1,0 +1,515 @@
+'use client';
+
+import Link from 'next/link';
+import { FormEvent, useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
+import { LoadingButton } from '@/components/ui/loading-button';
+import { signOut, useSession } from '@/lib/auth-client';
+import {
+  EMPLOYMENT_TYPES,
+  formatDateLabel,
+  formatEmploymentPeriod,
+  formatEmploymentType,
+  getEmployeeRecord,
+  updateEmployeeLeaveBalances,
+  updateEmployeeProfile,
+  type EmployeeDetail,
+  type EmploymentType,
+} from '@/lib/employees';
+import { formatLeaveType, BALANCE_LEAVE_TYPES, formatLeaveStatus, getLeaveStatusClassName } from '@/lib/leave';
+import { getOnboardingStatus } from '@/lib/onboarding';
+import { getTeamOverview, type TeamOverview } from '@/lib/team';
+
+const BALANCE_TYPES = BALANCE_LEAVE_TYPES;
+
+export default function EmployeeDetailPage() {
+  const router = useRouter();
+  const params = useParams<{ userId: string }>();
+  const userId = params.userId;
+  const { data: session, isPending } = useSession();
+  const [team, setTeam] = useState<TeamOverview | null>(null);
+  const [employee, setEmployee] = useState<EmployeeDetail | null>(null);
+  const [periodYear, setPeriodYear] = useState(new Date().getFullYear());
+  const [employmentType, setEmploymentType] = useState<EmploymentType>('probation');
+  const [jobTitle, setJobTitle] = useState('');
+  const [hireDate, setHireDate] = useState('');
+  const [contractStartDate, setContractStartDate] = useState('');
+  const [contractEndDate, setContractEndDate] = useState('');
+  const [probationEndDate, setProbationEndDate] = useState('');
+  const [notes, setNotes] = useState('');
+  const [balanceInputs, setBalanceInputs] = useState<Record<string, number>>({
+    vacation: 0,
+    sick: 0,
+    emergency: 0,
+  });
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+
+  async function loadEmployee(nextYear = periodYear) {
+    const record = await getEmployeeRecord(userId, nextYear);
+    setEmployee(record);
+    setEmploymentType(record.profile.employmentType);
+    setJobTitle(record.profile.jobTitle ?? '');
+    setHireDate(record.profile.hireDate);
+    setContractStartDate(record.profile.contractStartDate);
+    setContractEndDate(record.profile.contractEndDate ?? '');
+    setProbationEndDate(record.profile.probationEndDate ?? '');
+    setNotes(record.profile.notes ?? '');
+
+    const nextBalances: Record<string, number> = {
+      vacation: 0,
+      sick: 0,
+      emergency: 0,
+    };
+
+    for (const balance of record.leaveBalances) {
+      nextBalances[balance.leaveType] = balance.entitledDays;
+    }
+
+    setBalanceInputs(nextBalances);
+  }
+
+  useEffect(() => {
+    if (isPending || !userId) {
+      return;
+    }
+
+    if (!session) {
+      router.replace('/sign-in');
+      return;
+    }
+
+    void getOnboardingStatus().then((status) => {
+      if (status.needsOnboarding) {
+        router.replace('/onboarding');
+        return;
+      }
+
+      void getTeamOverview()
+        .then((overview) => {
+          if (!overview.currentMember?.canInviteEmployees) {
+            router.replace('/dashboard');
+            return;
+          }
+
+          setTeam(overview);
+          return loadEmployee();
+        })
+        .catch(() => router.replace('/dashboard'));
+    });
+  }, [isPending, router, session, userId]);
+
+  useEffect(() => {
+    if (!team) {
+      return;
+    }
+
+    void loadEmployee(periodYear).catch((loadError) => {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : 'Unable to load employee record.',
+      );
+    });
+  }, [periodYear, team]);
+
+  async function handleProfileSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setSuccess(null);
+    setProfileLoading(true);
+
+    try {
+      await updateEmployeeProfile(userId, {
+        employmentType,
+        jobTitle,
+        hireDate,
+        contractStartDate,
+        contractEndDate: contractEndDate || null,
+        probationEndDate: probationEndDate || null,
+        notes: notes || null,
+      });
+      await loadEmployee();
+      setSuccess('Employment profile updated.');
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : 'Unable to update profile.',
+      );
+    } finally {
+      setProfileLoading(false);
+    }
+  }
+
+  async function handleBalancesSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setSuccess(null);
+    setBalanceLoading(true);
+
+    try {
+      await updateEmployeeLeaveBalances(userId, {
+        periodYear,
+        balances: BALANCE_TYPES.map((leaveType) => ({
+          leaveType,
+          entitledDays: balanceInputs[leaveType] ?? 0,
+        })),
+      });
+      await loadEmployee();
+      setSuccess('Leave balances updated.');
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : 'Unable to update leave balances.',
+      );
+    } finally {
+      setBalanceLoading(false);
+    }
+  }
+
+  async function handleSignOut() {
+    await signOut();
+    router.push('/sign-in');
+    router.refresh();
+  }
+
+  if (isPending || !team || !employee) {
+    return <DashboardSkeleton />;
+  }
+
+  const branch = team.branches.find((item) => item._id === employee.branchId);
+
+  return (
+    <div className="min-h-full bg-slate-950 text-slate-100">
+      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.25em] text-emerald-400">
+              {team.organization.name}
+            </p>
+            <h1 className="text-lg font-semibold">{employee.name}</h1>
+            <p className="text-sm text-slate-400">{employee.email}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/dashboard/employees"
+              className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
+            >
+              Employees
+            </Link>
+            <button
+              onClick={handleSignOut}
+              className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-6xl space-y-8 px-6 py-10">
+        {error ? (
+          <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            {error}
+          </p>
+        ) : null}
+
+        {success ? (
+          <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
+            {success}
+          </p>
+        ) : null}
+
+        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+          <h2 className="text-lg font-semibold text-white">Employment overview</h2>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <article className="rounded-xl bg-slate-950 p-4">
+              <p className="text-xs uppercase tracking-[0.15em] text-slate-500">
+                Status
+              </p>
+              <p className="mt-2 font-medium text-white">
+                {formatEmploymentType(employee.profile.employmentType)}
+              </p>
+            </article>
+            <article className="rounded-xl bg-slate-950 p-4">
+              <p className="text-xs uppercase tracking-[0.15em] text-slate-500">
+                Branch
+              </p>
+              <p className="mt-2 font-medium text-white">
+                {branch?.name ?? 'Unassigned'}
+              </p>
+            </article>
+            <article className="rounded-xl bg-slate-950 p-4">
+              <p className="text-xs uppercase tracking-[0.15em] text-slate-500">
+                Contract period
+              </p>
+              <p className="mt-2 font-medium text-white">
+                {formatEmploymentPeriod(employee.profile)}
+              </p>
+            </article>
+            <article className="rounded-xl bg-slate-950 p-4">
+              <p className="text-xs uppercase tracking-[0.15em] text-slate-500">
+                Hired
+              </p>
+              <p className="mt-2 font-medium text-white">
+                {formatDateLabel(employee.profile.hireDate)}
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+          <h2 className="text-lg font-semibold text-white">Employment profile</h2>
+          <p className="mt-2 text-sm text-slate-400">
+            Set employment type, contract dates, and probation period.
+          </p>
+
+          <form className="mt-6 space-y-4" onSubmit={handleProfileSubmit}>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="block space-y-2">
+                <span className="text-sm text-slate-300">Employment type</span>
+                <select
+                  value={employmentType}
+                  onChange={(event) =>
+                    setEmploymentType(event.target.value as EmploymentType)
+                  }
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                >
+                  {EMPLOYMENT_TYPES.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block space-y-2">
+                <span className="text-sm text-slate-300">Job title</span>
+                <input
+                  type="text"
+                  value={jobTitle}
+                  onChange={(event) => setJobTitle(event.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                  placeholder="e.g. Sales Associate"
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="block space-y-2">
+                <span className="text-sm text-slate-300">Hire date</span>
+                <input
+                  type="date"
+                  required
+                  value={hireDate}
+                  onChange={(event) => setHireDate(event.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                />
+              </label>
+              <label className="block space-y-2">
+                <span className="text-sm text-slate-300">Probation end</span>
+                <input
+                  type="date"
+                  value={probationEndDate}
+                  onChange={(event) => setProbationEndDate(event.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="block space-y-2">
+                <span className="text-sm text-slate-300">Contract start</span>
+                <input
+                  type="date"
+                  required
+                  value={contractStartDate}
+                  onChange={(event) => setContractStartDate(event.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                />
+              </label>
+              <label className="block space-y-2">
+                <span className="text-sm text-slate-300">Contract end</span>
+                <input
+                  type="date"
+                  value={contractEndDate}
+                  onChange={(event) => setContractEndDate(event.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                />
+                <span className="text-xs text-slate-500">
+                  Leave blank for open-ended contracts.
+                </span>
+              </label>
+            </div>
+
+            <label className="block space-y-2">
+              <span className="text-sm text-slate-300">Notes</span>
+              <textarea
+                rows={3}
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                placeholder="Internal notes about this employee"
+              />
+            </label>
+
+            <LoadingButton
+              type="submit"
+              loading={profileLoading}
+              loadingText="Saving…"
+              className="rounded-lg bg-emerald-500 px-5 py-2.5 font-medium text-slate-950 transition hover:bg-emerald-400"
+            >
+              Save profile
+            </LoadingButton>
+          </form>
+        </section>
+
+        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Leave balances</h2>
+              <p className="mt-2 text-sm text-slate-400">
+                Set how many days this employee can take per leave type.
+              </p>
+            </div>
+            <label className="block space-y-2">
+              <span className="text-sm text-slate-300">Year</span>
+              <input
+                type="number"
+                min={2000}
+                max={2100}
+                value={periodYear}
+                onChange={(event) => setPeriodYear(Number(event.target.value))}
+                className="w-28 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+              />
+            </label>
+          </div>
+
+          <div className="mt-6 grid gap-4 sm:grid-cols-3">
+            {BALANCE_TYPES.map((leaveType) => {
+              const balance = employee.leaveBalances.find(
+                (item) => item.leaveType === leaveType,
+              );
+
+              return (
+                <article
+                  key={leaveType}
+                  className="rounded-xl border border-slate-800 bg-slate-950 p-4"
+                >
+                  <p className="text-sm text-slate-400">
+                    {formatLeaveType(leaveType)}
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold text-white">
+                    {balance?.availableDays ?? 0}
+                    <span className="text-sm font-normal text-slate-500">
+                      {' '}
+                      / {balance?.entitledDays ?? 0} available
+                    </span>
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Used {balance?.usedDays ?? 0} · Pending{' '}
+                    {balance?.pendingDays ?? 0}
+                  </p>
+                </article>
+              );
+            })}
+          </div>
+
+          <form className="mt-6 space-y-4" onSubmit={handleBalancesSubmit}>
+            <div className="grid gap-4 md:grid-cols-3">
+              {BALANCE_TYPES.map((leaveType) => (
+                <label key={leaveType} className="block space-y-2">
+                  <span className="text-sm text-slate-300">
+                    {formatLeaveType(leaveType)} days
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={365}
+                    required
+                    value={balanceInputs[leaveType] ?? 0}
+                    onChange={(event) =>
+                      setBalanceInputs((current) => ({
+                        ...current,
+                        [leaveType]: Number(event.target.value),
+                      }))
+                    }
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                  />
+                </label>
+              ))}
+            </div>
+
+            <LoadingButton
+              type="submit"
+              loading={balanceLoading}
+              loadingText="Saving…"
+              className="rounded-lg bg-emerald-500 px-5 py-2.5 font-medium text-slate-950 transition hover:bg-emerald-400"
+            >
+              Save leave balances
+            </LoadingButton>
+          </form>
+        </section>
+
+        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+          <h2 className="text-lg font-semibold text-white">Leave history</h2>
+          <p className="mt-2 text-sm text-slate-400">
+            All leave requests submitted by this employee.
+          </p>
+
+          <div className="mt-6 space-y-3">
+            {employee.leaveHistory.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-slate-800 p-4 text-sm text-slate-500">
+                No leave requests yet.
+              </p>
+            ) : (
+              employee.leaveHistory.map((request) => (
+                <article
+                  key={request.id}
+                  className="rounded-xl border border-slate-800 bg-slate-950 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-white">
+                        {formatLeaveType(request.leaveType)}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-400">
+                        {formatDateLabel(request.startDate)} →{' '}
+                        {formatDateLabel(request.endDate)}
+                        {request.requestedDays
+                          ? ` · ${request.requestedDays} day(s)`
+                          : ''}
+                      </p>
+                      <p className="mt-2 text-sm text-slate-500">{request.reason}</p>
+                      {request.reviewNote ? (
+                        <p className="mt-2 text-sm text-slate-500">
+                          Review note: {request.reviewNote}
+                        </p>
+                      ) : null}
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-1 text-xs ${getLeaveStatusClassName(request.status)}`}
+                    >
+                      {formatLeaveStatus(request.status)}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-xs text-slate-600">
+                    Submitted {formatDateLabel(request.createdAt.slice(0, 10))}
+                    {request.reviewedAt
+                      ? ` · Reviewed ${formatDateLabel(request.reviewedAt.slice(0, 10))}`
+                      : ''}
+                  </p>
+                </article>
+              ))
+            )}
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}

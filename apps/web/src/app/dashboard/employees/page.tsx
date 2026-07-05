@@ -10,6 +10,12 @@ import { getOnboardingStatus } from '@/lib/onboarding';
 import { buildAcceptInviteUrl } from '@/lib/invite-url';
 import { formatOrgRole, isOrgAdminRole } from '@/lib/org-roles';
 import {
+  formatEmploymentPeriod,
+  formatEmploymentType,
+  listEmployeeRecords,
+  type EmployeeRecord,
+} from '@/lib/employees';
+import {
   cancelOrgInvitation,
   getTeamOverview,
   inviteEmployeeMember,
@@ -27,14 +33,12 @@ export default function EmployeesPage() {
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [employeeRecords, setEmployeeRecords] = useState<EmployeeRecord[]>([]);
 
   const isAdmin = isOrgAdminRole(team?.currentMember?.role);
   const assignedBranchId = team?.currentMember?.assignedBranchId ?? null;
 
-  const employees = useMemo(
-    () => team?.members.filter((member) => member.role === 'employee') ?? [],
-    [team],
-  );
+  const employees = employeeRecords;
 
   const pendingInvites = useMemo(
     () =>
@@ -82,6 +86,13 @@ export default function EmployeesPage() {
           } else if (overview.branches[0]) {
             setBranchId(overview.branches[0]._id);
           }
+
+          return listEmployeeRecords();
+        })
+        .then((records) => {
+          if (records) {
+            setEmployeeRecords(records.employees);
+          }
         })
         .catch(() => router.replace('/dashboard'));
     });
@@ -102,6 +113,8 @@ export default function EmployeesPage() {
       });
       const overview = await getTeamOverview();
       setTeam(overview);
+      const records = await listEmployeeRecords();
+      setEmployeeRecords(records.employees);
       setEmail('');
       setInviteUrl(result.inviteUrl);
       setSuccess(`Invitation sent to ${invitedEmail}.`);
@@ -125,6 +138,8 @@ export default function EmployeesPage() {
       await cancelOrgInvitation(invitationId);
       const overview = await getTeamOverview();
       setTeam(overview);
+      const records = await listEmployeeRecords();
+      setEmployeeRecords(records.employees);
       setSuccess('Invitation cancelled.');
       setInviteUrl(null);
     } catch (cancelError) {
@@ -267,19 +282,31 @@ export default function EmployeesPage() {
                   No employees yet. Send an invitation to get started.
                 </p>
               ) : (
-                employees.map((member) => (
-                  <article
-                    key={member.id}
-                    className="rounded-xl border border-slate-800 bg-slate-900 p-4"
+                employees.map((employee) => (
+                  <Link
+                    key={employee.userId}
+                    href={`/dashboard/employees/${employee.userId}`}
+                    className="block rounded-xl border border-slate-800 bg-slate-900 p-4 transition hover:border-slate-700 hover:bg-slate-900/80"
                   >
-                    <p className="font-medium text-white">{member.user.name}</p>
-                    <p className="text-sm text-slate-400">{member.user.email}</p>
-                    {member.branch ? (
-                      <p className="mt-2 text-sm text-slate-500">
-                        Branch: {member.branch.name}
-                      </p>
-                    ) : null}
-                  </article>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-white">{employee.name}</p>
+                        <p className="text-sm text-slate-400">{employee.email}</p>
+                        <p className="mt-2 text-sm text-slate-500">
+                          {formatEmploymentType(employee.profile.employmentType)}
+                          {employee.profile.jobTitle
+                            ? ` · ${employee.profile.jobTitle}`
+                            : ''}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {formatEmploymentPeriod(employee.profile)}
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-slate-800 px-2.5 py-1 text-xs text-emerald-300">
+                        View record
+                      </span>
+                    </div>
+                  </Link>
                 ))
               )}
             </div>
