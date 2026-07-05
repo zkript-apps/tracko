@@ -3,10 +3,10 @@
 import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
+import { toast } from 'sonner';
 import { LoadingButton } from '@/components/ui/loading-button';
-import { signOut, useSession } from '@/lib/auth-client';
-import { getOnboardingStatus } from '@/lib/onboarding';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useSession } from '@/lib/auth-client';
 import { buildAcceptInviteUrl } from '@/lib/invite-url';
 import { formatOrgRole, isOrgAdminRole } from '@/lib/org-roles';
 import {
@@ -24,12 +24,10 @@ import {
 
 export default function EmployeesPage() {
   const router = useRouter();
-  const { data: session, isPending } = useSession();
+  const { data: session } = useSession();
   const [team, setTeam] = useState<TeamOverview | null>(null);
   const [email, setEmail] = useState('');
   const [branchId, setBranchId] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -57,51 +55,37 @@ export default function EmployeesPage() {
   }, [assignedBranchId, branchId, isAdmin, team]);
 
   useEffect(() => {
-    if (isPending) {
-      return;
-    }
-
     if (!session) {
-      router.replace('/sign-in');
       return;
     }
 
-    void getOnboardingStatus().then((status) => {
-      if (status.needsOnboarding) {
-        router.replace('/onboarding');
-        return;
-      }
+    void getTeamOverview()
+      .then((overview) => {
+        if (!overview.currentMember?.canInviteEmployees) {
+          router.replace('/dashboard');
+          return;
+        }
 
-      void getTeamOverview()
-        .then((overview) => {
-          if (!overview.currentMember?.canInviteEmployees) {
-            router.replace('/dashboard');
-            return;
-          }
+        setTeam(overview);
 
-          setTeam(overview);
+        if (overview.currentMember.assignedBranchId) {
+          setBranchId(overview.currentMember.assignedBranchId);
+        } else if (overview.branches[0]) {
+          setBranchId(overview.branches[0]._id);
+        }
 
-          if (overview.currentMember.assignedBranchId) {
-            setBranchId(overview.currentMember.assignedBranchId);
-          } else if (overview.branches[0]) {
-            setBranchId(overview.branches[0]._id);
-          }
-
-          return listEmployeeRecords();
-        })
-        .then((records) => {
-          if (records) {
-            setEmployeeRecords(records.employees);
-          }
-        })
-        .catch(() => router.replace('/dashboard'));
-    });
-  }, [isPending, router, session]);
+        return listEmployeeRecords();
+      })
+      .then((records) => {
+        if (records) {
+          setEmployeeRecords(records.employees);
+        }
+      })
+      .catch(() => router.replace('/dashboard'));
+  }, [router, session]);
 
   async function handleInvite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
-    setSuccess(null);
     setInviteUrl(null);
     setLoading(true);
 
@@ -117,9 +101,9 @@ export default function EmployeesPage() {
       setEmployeeRecords(records.employees);
       setEmail('');
       setInviteUrl(result.inviteUrl);
-      setSuccess(`Invitation sent to ${invitedEmail}.`);
+      toast.success(`Invitation sent to ${invitedEmail}.`);
     } catch (inviteError) {
-      setError(
+      toast.error(
         inviteError instanceof Error
           ? inviteError.message
           : 'Unable to send invitation.',
@@ -130,8 +114,6 @@ export default function EmployeesPage() {
   }
 
   async function handleCancelInvitation(invitationId: string) {
-    setError(null);
-    setSuccess(null);
     setCancellingId(invitationId);
 
     try {
@@ -140,10 +122,10 @@ export default function EmployeesPage() {
       setTeam(overview);
       const records = await listEmployeeRecords();
       setEmployeeRecords(records.employees);
-      setSuccess('Invitation cancelled.');
       setInviteUrl(null);
+      toast.success('Invitation cancelled.');
     } catch (cancelError) {
-      setError(
+      toast.error(
         cancelError instanceof Error
           ? cancelError.message
           : 'Unable to cancel invitation.',
@@ -153,65 +135,32 @@ export default function EmployeesPage() {
     }
   }
 
-  async function handleSignOut() {
-    await signOut();
-    router.push('/sign-in');
-    router.refresh();
-  }
-
-  if (isPending || !team) {
-    return <DashboardSkeleton />;
+  if (!team) {
+    return (
+      <div className="space-y-6 px-6 py-8">
+        <Skeleton className="h-8 w-40" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-background text-slate-100">
-      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.25em] text-emerald-400">
-              {team.organization.name}
-            </p>
-            <h1 className="text-lg font-semibold">Employees</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/dashboard"
-              className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
-            >
-              Dashboard
-            </Link>
-            <button
-              onClick={handleSignOut}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
-            >
-              Sign out
-            </button>
-          </div>
+    <div className="space-y-8 px-6 py-8">
+      <div>
+        <h1 className="text-2xl font-semibold text-foreground">Employees</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Invite staff and manage employment records.
+        </p>
+      </div>
+
+      {inviteUrl ? (
+        <div className="space-y-2 rounded-lg border border-primary/20 bg-primary/10 px-3 py-3 text-sm text-primary">
+          <p>Share this invite link (valid until they accept):</p>
+          <code className="block overflow-x-auto rounded-lg bg-background px-3 py-2 text-xs">
+            {inviteUrl}
+          </code>
         </div>
-      </header>
-
-      <main className="mx-auto max-w-6xl space-y-8 px-6 py-10">
-        {error ? (
-          <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">
-            {error}
-          </p>
-        ) : null}
-
-        {success ? (
-          <div className="space-y-3 rounded-lg bg-emerald-500/10 px-3 py-3 text-sm text-emerald-300">
-            <p>{success}</p>
-            {inviteUrl ? (
-              <div className="space-y-2">
-                <p className="text-slate-400">
-                  Share this link with the employee (valid until they accept):
-                </p>
-                <code className="block overflow-x-auto rounded-lg bg-slate-950 px-3 py-2 text-xs text-emerald-200">
-                  {inviteUrl}
-                </code>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
+      ) : null}
 
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
           <h2 className="text-lg font-semibold text-white">Invite employee</h2>
@@ -357,7 +306,6 @@ export default function EmployeesPage() {
             </div>
           </div>
         </section>
-      </main>
     </div>
   );
 }

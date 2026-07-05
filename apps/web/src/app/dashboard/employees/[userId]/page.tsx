@@ -3,9 +3,10 @@
 import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
+import { toast } from 'sonner';
 import { LoadingButton } from '@/components/ui/loading-button';
-import { signOut, useSession } from '@/lib/auth-client';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useSession } from '@/lib/auth-client';
 import {
   EMPLOYMENT_TYPES,
   formatDateLabel,
@@ -18,7 +19,6 @@ import {
   type EmploymentType,
 } from '@/lib/employees';
 import { formatLeaveType, BALANCE_LEAVE_TYPES, formatLeaveStatus, getLeaveStatusClassName } from '@/lib/leave';
-import { getOnboardingStatus } from '@/lib/onboarding';
 import { getTeamOverview, type TeamOverview } from '@/lib/team';
 
 const BALANCE_TYPES = BALANCE_LEAVE_TYPES;
@@ -27,7 +27,7 @@ export default function EmployeeDetailPage() {
   const router = useRouter();
   const params = useParams<{ userId: string }>();
   const userId = params.userId;
-  const { data: session, isPending } = useSession();
+  const { data: session } = useSession();
   const [team, setTeam] = useState<TeamOverview | null>(null);
   const [employee, setEmployee] = useState<EmployeeDetail | null>(null);
   const [periodYear, setPeriodYear] = useState(new Date().getFullYear());
@@ -43,8 +43,6 @@ export default function EmployeeDetailPage() {
     sick: 0,
     emergency: 0,
   });
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [balanceLoading, setBalanceLoading] = useState(false);
 
@@ -73,34 +71,22 @@ export default function EmployeeDetailPage() {
   }
 
   useEffect(() => {
-    if (isPending || !userId) {
+    if (!session || !userId) {
       return;
     }
 
-    if (!session) {
-      router.replace('/sign-in');
-      return;
-    }
+    void getTeamOverview()
+      .then((overview) => {
+        if (!overview.currentMember?.canInviteEmployees) {
+          router.replace('/dashboard');
+          return;
+        }
 
-    void getOnboardingStatus().then((status) => {
-      if (status.needsOnboarding) {
-        router.replace('/onboarding');
-        return;
-      }
-
-      void getTeamOverview()
-        .then((overview) => {
-          if (!overview.currentMember?.canInviteEmployees) {
-            router.replace('/dashboard');
-            return;
-          }
-
-          setTeam(overview);
-          return loadEmployee();
-        })
-        .catch(() => router.replace('/dashboard'));
-    });
-  }, [isPending, router, session, userId]);
+        setTeam(overview);
+        return loadEmployee();
+      })
+      .catch(() => router.replace('/dashboard'));
+  }, [router, session, userId]);
 
   useEffect(() => {
     if (!team) {
@@ -108,7 +94,7 @@ export default function EmployeeDetailPage() {
     }
 
     void loadEmployee(periodYear).catch((loadError) => {
-      setError(
+      toast.error(
         loadError instanceof Error
           ? loadError.message
           : 'Unable to load employee record.',
@@ -118,8 +104,6 @@ export default function EmployeeDetailPage() {
 
   async function handleProfileSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
-    setSuccess(null);
     setProfileLoading(true);
 
     try {
@@ -133,9 +117,9 @@ export default function EmployeeDetailPage() {
         notes: notes || null,
       });
       await loadEmployee();
-      setSuccess('Employment profile updated.');
+      toast.success('Employment profile updated.');
     } catch (submitError) {
-      setError(
+      toast.error(
         submitError instanceof Error
           ? submitError.message
           : 'Unable to update profile.',
@@ -147,8 +131,6 @@ export default function EmployeeDetailPage() {
 
   async function handleBalancesSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
-    setSuccess(null);
     setBalanceLoading(true);
 
     try {
@@ -160,9 +142,9 @@ export default function EmployeeDetailPage() {
         })),
       });
       await loadEmployee();
-      setSuccess('Leave balances updated.');
+      toast.success('Leave balances updated.');
     } catch (submitError) {
-      setError(
+      toast.error(
         submitError instanceof Error
           ? submitError.message
           : 'Unable to update leave balances.',
@@ -172,58 +154,31 @@ export default function EmployeeDetailPage() {
     }
   }
 
-  async function handleSignOut() {
-    await signOut();
-    router.push('/sign-in');
-    router.refresh();
-  }
-
-  if (isPending || !team || !employee) {
-    return <DashboardSkeleton />;
+  if (!team || !employee) {
+    return (
+      <div className="space-y-6 px-6 py-8">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    );
   }
 
   const branch = team.branches.find((item) => item._id === employee.branchId);
 
   return (
-    <div className="min-h-screen bg-background text-slate-100">
-      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.25em] text-emerald-400">
-              {team.organization.name}
-            </p>
-            <h1 className="text-lg font-semibold">{employee.name}</h1>
-            <p className="text-sm text-slate-400">{employee.email}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/dashboard/employees"
-              className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
-            >
-              Employees
-            </Link>
-            <button
-              onClick={handleSignOut}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
-            >
-              Sign out
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-6xl space-y-8 px-6 py-10">
-        {error ? (
-          <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">
-            {error}
-          </p>
-        ) : null}
-
-        {success ? (
-          <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
-            {success}
-          </p>
-        ) : null}
+    <div className="space-y-8 px-6 py-8">
+      <div>
+        <Link
+          href="/dashboard/employees"
+          className="text-sm text-muted-foreground transition hover:text-foreground"
+        >
+          ← Employees
+        </Link>
+        <h1 className="mt-2 text-2xl font-semibold text-foreground">
+          {employee.name}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">{employee.email}</p>
+      </div>
 
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
           <h2 className="text-lg font-semibold text-white">Employment overview</h2>
@@ -509,7 +464,6 @@ export default function EmployeeDetailPage() {
             )}
           </div>
         </section>
-      </main>
     </div>
   );
 }
