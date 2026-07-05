@@ -5,7 +5,18 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { LoadingButton } from '@/components/ui/loading-button';
+import { DateInput, TimeInput } from '@/components/ui/date-input';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
 import { useSession } from '@/lib/auth-client';
 import {
   EMPLOYMENT_TYPES,
@@ -236,55 +247,55 @@ export default function EmployeeDetailPage() {
         <p className="mt-1 text-sm text-muted-foreground">{employee.email}</p>
       </div>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-          <h2 className="text-lg font-semibold text-white">Employment overview</h2>
+        <section className="rounded-2xl border border-border bg-card p-6">
+          <h2 className="text-lg font-semibold text-foreground">Employment overview</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            <article className="rounded-xl bg-slate-950 p-4">
-              <p className="text-xs uppercase tracking-[0.15em] text-slate-500">
+            <article className="rounded-xl border border-border bg-muted/30 p-4">
+              <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground">
                 Status
               </p>
-              <p className="mt-2 font-medium text-white">
+              <p className="mt-2 font-medium text-foreground">
                 {formatEmploymentType(employee.profile.employmentType)}
               </p>
             </article>
-            <article className="rounded-xl bg-slate-950 p-4">
-              <p className="text-xs uppercase tracking-[0.15em] text-slate-500">
+            <article className="rounded-xl border border-border bg-muted/30 p-4">
+              <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground">
                 Branch
               </p>
-              <p className="mt-2 font-medium text-white">
+              <p className="mt-2 font-medium text-foreground">
                 {branch?.name ?? 'Unassigned'}
               </p>
             </article>
-            <article className="rounded-xl bg-slate-950 p-4">
-              <p className="text-xs uppercase tracking-[0.15em] text-slate-500">
+            <article className="rounded-xl border border-border bg-muted/30 p-4">
+              <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground">
                 Contract period
               </p>
-              <p className="mt-2 font-medium text-white">
+              <p className="mt-2 font-medium text-foreground">
                 {formatEmploymentPeriod(employee.profile)}
               </p>
             </article>
-            <article className="rounded-xl bg-slate-950 p-4">
-              <p className="text-xs uppercase tracking-[0.15em] text-slate-500">
+            <article className="rounded-xl border border-border bg-muted/30 p-4">
+              <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground">
                 Hired
               </p>
-              <p className="mt-2 font-medium text-white">
+              <p className="mt-2 font-medium text-foreground">
                 {formatDateLabel(employee.profile.hireDate)}
               </p>
             </article>
-            <article className="rounded-xl bg-slate-950 p-4">
-              <p className="text-xs uppercase tracking-[0.15em] text-slate-500">
+            <article className="rounded-xl border border-border bg-muted/30 p-4">
+              <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground">
                 Work schedule
               </p>
-              <p className="mt-2 font-medium text-white">
+              <p className="mt-2 font-medium text-foreground">
                 {formatWorkSchedule(employee.profile.workSchedule)}
               </p>
             </article>
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-          <h2 className="text-lg font-semibold text-white">Work schedule</h2>
-          <p className="mt-2 text-sm text-slate-400">
+        <section className="rounded-2xl border border-border bg-card p-6">
+          <h2 className="text-lg font-semibold text-foreground">Work schedule</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
             Set weekly rest days and shift hours. Scheduled day offs are not
             counted as absences in DTR.
           </p>
@@ -317,22 +328,18 @@ export default function EmployeeDetailPage() {
             <div className="grid gap-4 md:grid-cols-2">
               <label className="block space-y-2">
                 <span className="text-sm text-slate-300">Shift start</span>
-                <input
-                  type="time"
+                <TimeInput
                   required
                   value={workStartTime}
                   onChange={(event) => setWorkStartTime(event.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
                 />
               </label>
               <label className="block space-y-2">
                 <span className="text-sm text-slate-300">Shift end</span>
-                <input
-                  type="time"
+                <TimeInput
                   required
                   value={workEndTime}
                   onChange={(event) => setWorkEndTime(event.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
                 />
               </label>
             </div>
@@ -343,11 +350,10 @@ export default function EmployeeDetailPage() {
                 One-off holidays or special rest days outside the weekly schedule.
               </p>
               <div className="flex flex-wrap gap-3">
-                <input
-                  type="date"
+                <DateInput
                   value={newDayOffDate}
                   onChange={(event) => setNewDayOffDate(event.target.value)}
-                  className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                  className="max-w-xs"
                 />
                 <button
                   type="button"
@@ -396,129 +402,125 @@ export default function EmployeeDetailPage() {
           </form>
         </section>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-          <h2 className="text-lg font-semibold text-white">Employment profile</h2>
-          <p className="mt-2 text-sm text-slate-400">
+        <section className="rounded-2xl border border-border bg-card p-6">
+          <h2 className="text-lg font-semibold text-foreground">Employment profile</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
             Set employment type, contract dates, and probation period.
           </p>
 
           <form className="mt-6 space-y-4" onSubmit={handleProfileSubmit}>
             <div className="grid gap-4 md:grid-cols-2">
-              <label className="block space-y-2">
-                <span className="text-sm text-slate-300">Employment type</span>
-                <select
+              <div className="space-y-2">
+                <Label htmlFor="employment-type">Employment type</Label>
+                <Select
                   value={employmentType}
-                  onChange={(event) =>
-                    setEmploymentType(event.target.value as EmploymentType)
+                  onValueChange={(value) =>
+                    setEmploymentType(value as EmploymentType)
                   }
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
                 >
-                  {EMPLOYMENT_TYPES.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  <SelectTrigger id="employment-type" className="w-full">
+                    <SelectValue placeholder="Select employment type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EMPLOYMENT_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-              <label className="block space-y-2">
-                <span className="text-sm text-slate-300">Job title</span>
-                <input
+              <div className="space-y-2">
+                <Label htmlFor="job-title">Job title</Label>
+                <Input
+                  id="job-title"
                   type="text"
                   value={jobTitle}
                   onChange={(event) => setJobTitle(event.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
                   placeholder="e.g. Sales Associate"
                 />
-              </label>
+              </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <label className="block space-y-2">
-                <span className="text-sm text-slate-300">Hire date</span>
-                <input
-                  type="date"
+              <div className="space-y-2">
+                <Label htmlFor="hire-date">Hire date</Label>
+                <DateInput
+                  id="hire-date"
                   required
                   value={hireDate}
                   onChange={(event) => setHireDate(event.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
                 />
-              </label>
-              <label className="block space-y-2">
-                <span className="text-sm text-slate-300">Probation end</span>
-                <input
-                  type="date"
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="probation-end">Probation end</Label>
+                <DateInput
+                  id="probation-end"
                   value={probationEndDate}
                   onChange={(event) => setProbationEndDate(event.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
                 />
-              </label>
+              </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <label className="block space-y-2">
-                <span className="text-sm text-slate-300">Contract start</span>
-                <input
-                  type="date"
+              <div className="space-y-2">
+                <Label htmlFor="contract-start">Contract start</Label>
+                <DateInput
+                  id="contract-start"
                   required
                   value={contractStartDate}
                   onChange={(event) => setContractStartDate(event.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
                 />
-              </label>
-              <label className="block space-y-2">
-                <span className="text-sm text-slate-300">Contract end</span>
-                <input
-                  type="date"
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="contract-end">Contract end</Label>
+                <DateInput
+                  id="contract-end"
                   value={contractEndDate}
                   onChange={(event) => setContractEndDate(event.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
                 />
-                <span className="text-xs text-slate-500">
+                <p className="text-xs text-muted-foreground">
                   Leave blank for open-ended contracts.
-                </span>
-              </label>
+                </p>
+              </div>
             </div>
 
-            <label className="block space-y-2">
-              <span className="text-sm text-slate-300">Notes</span>
-              <textarea
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notes</Label>
+              <Textarea
+                id="notes"
                 rows={3}
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
                 placeholder="Internal notes about this employee"
               />
-            </label>
+            </div>
 
-            <LoadingButton
-              type="submit"
-              loading={profileLoading}
-              loadingText="Saving…"
-              className="rounded-lg bg-emerald-500 px-5 py-2.5 font-medium text-slate-950 transition hover:bg-emerald-400"
-            >
+            <LoadingButton type="submit" loading={profileLoading} loadingText="Saving…">
               Save profile
             </LoadingButton>
           </form>
         </section>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+        <section className="rounded-2xl border border-border bg-card p-6">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-white">Leave balances</h2>
-              <p className="mt-2 text-sm text-slate-400">
+              <h2 className="text-lg font-semibold text-foreground">Leave balances</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
                 Set how many days this employee can take per leave type.
               </p>
             </div>
             <label className="block space-y-2">
-              <span className="text-sm text-slate-300">Year</span>
-              <input
+              <Label htmlFor="period-year">Year</Label>
+              <Input
+                id="period-year"
                 type="number"
                 min={2000}
                 max={2100}
                 value={periodYear}
                 onChange={(event) => setPeriodYear(Number(event.target.value))}
-                className="w-28 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                className="w-28"
               />
             </label>
           </div>
@@ -532,7 +534,7 @@ export default function EmployeeDetailPage() {
               return (
                 <article
                   key={leaveType}
-                  className="rounded-xl border border-slate-800 bg-slate-950 p-4"
+                  className="rounded-xl border border-border bg-muted/30 p-4"
                 >
                   <p className="text-sm text-slate-400">
                     {formatLeaveType(leaveType)}
@@ -589,22 +591,22 @@ export default function EmployeeDetailPage() {
           </form>
         </section>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-          <h2 className="text-lg font-semibold text-white">Leave history</h2>
-          <p className="mt-2 text-sm text-slate-400">
+        <section className="rounded-2xl border border-border bg-card p-6">
+          <h2 className="text-lg font-semibold text-foreground">Leave history</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
             All leave requests submitted by this employee.
           </p>
 
           <div className="mt-6 space-y-3">
             {employee.leaveHistory.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-slate-800 p-4 text-sm text-slate-500">
+              <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
                 No leave requests yet.
               </p>
             ) : (
               employee.leaveHistory.map((request) => (
                 <article
                   key={request.id}
-                  className="rounded-xl border border-slate-800 bg-slate-950 p-4"
+                  className="rounded-xl border border-border bg-muted/30 p-4"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>

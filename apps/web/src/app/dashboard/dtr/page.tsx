@@ -5,7 +5,16 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DateInput } from '@/components/ui/date-input';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Sheet,
   SheetContent,
@@ -315,10 +324,10 @@ export default function DtrPage() {
       ) : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <label className="block space-y-2">
-          <span className="text-sm text-muted-foreground">From</span>
-          <Input
-            type="date"
+        <div className="space-y-2">
+          <Label htmlFor="dtr-from">From</Label>
+          <DateInput
+            id="dtr-from"
             value={range.startDate}
             onChange={(event) =>
               setRange((current) => ({
@@ -327,11 +336,11 @@ export default function DtrPage() {
               }))
             }
           />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm text-muted-foreground">To</span>
-          <Input
-            type="date"
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="dtr-to">To</Label>
+          <DateInput
+            id="dtr-to"
             value={range.endDate}
             onChange={(event) =>
               setRange((current) => ({
@@ -340,33 +349,41 @@ export default function DtrPage() {
               }))
             }
           />
-        </label>
+        </div>
         {isAdmin ? (
-          <label className="block space-y-2">
-            <span className="text-sm text-muted-foreground">Branch</span>
-            <select
-              value={branchId}
-              onChange={(event) => setBranchId(event.target.value)}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          <div className="space-y-2">
+            <Label htmlFor="dtr-branch">Branch</Label>
+            <Select
+              value={branchId || 'all'}
+              onValueChange={(value) =>
+                setBranchId(value === 'all' ? '' : value)
+              }
             >
-              <option value="">All branches</option>
-              {team.branches.map((branch) => (
-                <option key={branch._id} value={branch._id}>
-                  {branch.name}
-                </option>
-              ))}
-            </select>
-          </label>
+              <SelectTrigger id="dtr-branch" className="w-full">
+                <SelectValue placeholder="Select branch" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All branches</SelectItem>
+                {team.branches.map((branch) => (
+                  <SelectItem key={branch._id} value={branch._id}>
+                    {branch.name}
+                    {branch.isHeadOffice ? ' (Head office)' : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         ) : null}
-        <label className="block space-y-2">
-          <span className="text-sm text-muted-foreground">Search employee</span>
+        <div className="space-y-2">
+          <Label htmlFor="dtr-search">Search employee</Label>
           <Input
+            id="dtr-search"
             type="search"
             placeholder="Name or email"
             value={employeeFilter}
             onChange={(event) => setEmployeeFilter(event.target.value)}
           />
-        </label>
+        </div>
       </section>
 
       <section className="grid gap-4 sm:grid-cols-3">
