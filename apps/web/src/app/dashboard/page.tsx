@@ -13,10 +13,6 @@ import { getTeamOverview, type TeamOverview } from '@/lib/team';
 
 const modules = [
   {
-    title: 'Daily Time Records',
-    description: 'Auto-generated DTR summaries ready for HR review.',
-  },
-  {
     title: 'Live Location',
     description: 'Monitor field teams and geofence alerts in real time.',
   },
@@ -104,6 +100,12 @@ export default function DashboardPage() {
                 className="inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
               >
                 View attendance
+              </Link>
+              <Link
+                href="/dashboard/dtr"
+                className="inline-flex rounded-lg border border-primary/40 px-4 py-2 text-sm font-medium text-primary transition hover:border-primary hover:bg-primary/10"
+              >
+                Review DTR
               </Link>
               <Link
                 href="/dashboard/leave"

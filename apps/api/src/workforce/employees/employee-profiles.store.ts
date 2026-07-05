@@ -1,5 +1,12 @@
 import { randomBytes } from 'crypto';
 import { getMongoDb } from '../../database/mongo';
+import {
+  DEFAULT_WORK_SCHEDULE,
+  resolveWorkSchedule,
+  serializeWorkSchedule,
+  type Weekday,
+  type WorkSchedule,
+} from './work-schedule.util';
 
 export const EMPLOYMENT_TYPES = [
   'full_time',
@@ -23,6 +30,10 @@ export interface EmployeeProfile {
   contractEndDate?: string;
   probationEndDate?: string;
   notes?: string;
+  weeklyRestDays?: Weekday[];
+  workStartTime?: string;
+  workEndTime?: string;
+  extraDayOffDates?: string[];
   createdAt: Date;
   updatedAt: Date;
   updatedBy?: string;
@@ -51,6 +62,10 @@ export async function createEmployeeProfile(input: {
   contractEndDate?: string;
   probationEndDate?: string;
   notes?: string;
+  weeklyRestDays?: Weekday[];
+  workStartTime?: string;
+  workEndTime?: string;
+  extraDayOffDates?: string[];
   updatedBy?: string;
 }): Promise<EmployeeProfile> {
   const collection = await getCollection();
@@ -68,6 +83,10 @@ export async function createEmployeeProfile(input: {
     contractEndDate: input.contractEndDate || undefined,
     probationEndDate: input.probationEndDate || undefined,
     notes: input.notes?.trim() || undefined,
+    weeklyRestDays: DEFAULT_WORK_SCHEDULE.weeklyRestDays,
+    workStartTime: DEFAULT_WORK_SCHEDULE.workStartTime,
+    workEndTime: DEFAULT_WORK_SCHEDULE.workEndTime,
+    extraDayOffDates: [],
     createdAt: now,
     updatedAt: now,
     updatedBy: input.updatedBy,
@@ -167,7 +186,50 @@ export async function updateEmployeeProfile(input: {
   return result ?? null;
 }
 
+export async function updateEmployeeWorkSchedule(input: {
+  organizationId: string;
+  userId: string;
+  weeklyRestDays: Weekday[];
+  workStartTime: string;
+  workEndTime: string;
+  extraDayOffDates: string[];
+  updatedBy: string;
+}): Promise<EmployeeProfile | null> {
+  const collection = await getCollection();
+
+  const result = await collection.findOneAndUpdate(
+    {
+      organizationId: String(input.organizationId),
+      userId: String(input.userId),
+    },
+    {
+      $set: {
+        weeklyRestDays: input.weeklyRestDays,
+        workStartTime: input.workStartTime,
+        workEndTime: input.workEndTime,
+        extraDayOffDates: input.extraDayOffDates,
+        updatedAt: new Date(),
+        updatedBy: input.updatedBy,
+      },
+    },
+    { returnDocument: 'after' },
+  );
+
+  return result ?? null;
+}
+
+export function getProfileWorkSchedule(profile: EmployeeProfile): WorkSchedule {
+  return resolveWorkSchedule({
+    weeklyRestDays: profile.weeklyRestDays,
+    workStartTime: profile.workStartTime,
+    workEndTime: profile.workEndTime,
+    extraDayOffDates: profile.extraDayOffDates,
+  });
+}
+
 export function serializeEmployeeProfile(profile: EmployeeProfile) {
+  const workSchedule = getProfileWorkSchedule(profile);
+
   return {
     userId: profile.userId,
     memberId: profile.memberId,
@@ -179,6 +241,7 @@ export function serializeEmployeeProfile(profile: EmployeeProfile) {
     contractEndDate: profile.contractEndDate ?? null,
     probationEndDate: profile.probationEndDate ?? null,
     notes: profile.notes ?? null,
+    workSchedule: serializeWorkSchedule(workSchedule),
     updatedAt: profile.updatedAt.toISOString(),
   };
 }

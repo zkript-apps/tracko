@@ -10,6 +10,23 @@ export const EMPLOYMENT_TYPES = [
 
 export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number]['value'];
 
+export type WorkSchedule = {
+  weeklyRestDays: number[];
+  workStartTime: string;
+  workEndTime: string;
+  extraDayOffDates: string[];
+};
+
+export const WEEKDAY_OPTIONS = [
+  { value: 0, label: 'Sun' },
+  { value: 1, label: 'Mon' },
+  { value: 2, label: 'Tue' },
+  { value: 3, label: 'Wed' },
+  { value: 4, label: 'Thu' },
+  { value: 5, label: 'Fri' },
+  { value: 6, label: 'Sat' },
+] as const;
+
 export type EmployeeProfile = {
   userId: string;
   memberId: string;
@@ -21,6 +38,7 @@ export type EmployeeProfile = {
   contractEndDate: string | null;
   probationEndDate: string | null;
   notes: string | null;
+  workSchedule: WorkSchedule;
   updatedAt: string;
 };
 
@@ -98,6 +116,34 @@ export async function updateEmployeeLeaveBalances(
     method: 'PUT',
     body: JSON.stringify(input),
   });
+}
+
+export async function updateEmployeeWorkSchedule(
+  userId: string,
+  input: WorkSchedule,
+): Promise<WorkSchedule> {
+  return apiFetch(`/employees/${encodeURIComponent(userId)}/work-schedule`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+export function formatWorkSchedule(schedule: WorkSchedule): string {
+  const restLabels = schedule.weeklyRestDays
+    .map(
+      (day) => WEEKDAY_OPTIONS.find((option) => option.value === day)?.label,
+    )
+    .filter(Boolean)
+    .join(', ');
+
+  return `${schedule.workStartTime}–${schedule.workEndTime} · Off: ${restLabels || 'None'}`;
+}
+
+export function formatWeekdayList(days: number[]): string {
+  return days
+    .map((day) => WEEKDAY_OPTIONS.find((option) => option.value === day)?.label)
+    .filter(Boolean)
+    .join(', ');
 }
 
 export function formatEmploymentType(type: string): string {

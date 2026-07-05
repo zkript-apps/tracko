@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import {
   CalendarDays,
+  ClipboardList,
   Clock,
   LayoutDashboard,
   LogOut,
@@ -62,6 +63,11 @@ function buildNavItems(team: TeamOverview): NavItem[] {
         href: '/dashboard/attendance',
         label: 'Attendance',
         icon: Clock,
+      },
+      {
+        href: '/dashboard/dtr',
+        label: 'DTR',
+        icon: ClipboardList,
       },
       {
         href: '/dashboard/leave',
@@ -270,7 +276,7 @@ export function DashboardShell({
           </div>
         </header>
 
-        <div className="min-h-screen">{children}</div>
+        <div className="min-h-screen w-full min-w-0">{children}</div>
       </div>
     </div>
   );

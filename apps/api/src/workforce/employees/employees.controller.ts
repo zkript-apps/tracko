@@ -40,6 +40,13 @@ class UpdateLeaveBalancesDto {
   balances!: LeaveBalanceEntryDto[];
 }
 
+class UpdateWorkScheduleDto {
+  weeklyRestDays?: number[];
+  workStartTime?: string;
+  workEndTime?: string;
+  extraDayOffDates?: string[];
+}
+
 @Controller('employees')
 export class EmployeesController {
   constructor(private readonly employees: EmployeesService) {}
@@ -106,5 +113,14 @@ export class EmployeesController {
     }
 
     return this.employees.updateLeaveBalances(request, userId, body);
+  }
+
+  @Patch(':userId/work-schedule')
+  updateWorkSchedule(
+    @Req() request: Request,
+    @Param('userId') userId: string,
+    @Body() body: UpdateWorkScheduleDto,
+  ) {
+    return this.employees.updateWorkSchedule(request, userId, body);
   }
 }

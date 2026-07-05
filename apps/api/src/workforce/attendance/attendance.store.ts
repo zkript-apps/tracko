@@ -115,3 +115,58 @@ export function startOfLocalDay(date = new Date()): Date {
   start.setHours(0, 0, 0, 0);
   return start;
 }
+
+export function endOfLocalDay(date = new Date()): Date {
+  const end = new Date(date);
+  end.setHours(23, 59, 59, 999);
+  return end;
+}
+
+export async function listAttendanceEventsForUserBetween(
+  organizationId: string,
+  userId: string,
+  start: Date,
+  end: Date,
+): Promise<AttendanceEvent[]> {
+  const collection = await getCollection();
+  return collection
+    .find({
+      organizationId,
+      userId,
+      recordedAt: { $gte: start, $lte: end },
+    })
+    .sort({ recordedAt: 1 })
+    .toArray();
+}
+
+export async function listAttendanceEventsForBranchBetween(
+  organizationId: string,
+  branchId: string,
+  start: Date,
+  end: Date,
+): Promise<AttendanceEvent[]> {
+  const collection = await getCollection();
+  return collection
+    .find({
+      organizationId,
+      branchId,
+      recordedAt: { $gte: start, $lte: end },
+    })
+    .sort({ recordedAt: 1 })
+    .toArray();
+}
+
+export async function listAttendanceEventsForOrganizationBetween(
+  organizationId: string,
+  start: Date,
+  end: Date,
+): Promise<AttendanceEvent[]> {
+  const collection = await getCollection();
+  return collection
+    .find({
+      organizationId,
+      recordedAt: { $gte: start, $lte: end },
+    })
+    .sort({ recordedAt: 1 })
+    .toArray();
+}

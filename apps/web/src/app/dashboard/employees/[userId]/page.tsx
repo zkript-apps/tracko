@@ -12,9 +12,12 @@ import {
   formatDateLabel,
   formatEmploymentPeriod,
   formatEmploymentType,
+  formatWorkSchedule,
   getEmployeeRecord,
   updateEmployeeLeaveBalances,
   updateEmployeeProfile,
+  updateEmployeeWorkSchedule,
+  WEEKDAY_OPTIONS,
   type EmployeeDetail,
   type EmploymentType,
 } from '@/lib/employees';
@@ -43,8 +46,14 @@ export default function EmployeeDetailPage() {
     sick: 0,
     emergency: 0,
   });
+  const [weeklyRestDays, setWeeklyRestDays] = useState<number[]>([0, 6]);
+  const [workStartTime, setWorkStartTime] = useState('09:00');
+  const [workEndTime, setWorkEndTime] = useState('17:00');
+  const [extraDayOffDates, setExtraDayOffDates] = useState<string[]>([]);
+  const [newDayOffDate, setNewDayOffDate] = useState('');
   const [profileLoading, setProfileLoading] = useState(false);
   const [balanceLoading, setBalanceLoading] = useState(false);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
 
   async function loadEmployee(nextYear = periodYear) {
     const record = await getEmployeeRecord(userId, nextYear);
@@ -56,6 +65,10 @@ export default function EmployeeDetailPage() {
     setContractEndDate(record.profile.contractEndDate ?? '');
     setProbationEndDate(record.profile.probationEndDate ?? '');
     setNotes(record.profile.notes ?? '');
+    setWeeklyRestDays(record.profile.workSchedule.weeklyRestDays);
+    setWorkStartTime(record.profile.workSchedule.workStartTime);
+    setWorkEndTime(record.profile.workSchedule.workEndTime);
+    setExtraDayOffDates(record.profile.workSchedule.extraDayOffDates);
 
     const nextBalances: Record<string, number> = {
       vacation: 0,
@@ -154,6 +167,49 @@ export default function EmployeeDetailPage() {
     }
   }
 
+  function toggleRestDay(day: number) {
+    setWeeklyRestDays((current) =>
+      current.includes(day)
+        ? current.filter((value) => value !== day)
+        : [...current, day].sort((left, right) => left - right),
+    );
+  }
+
+  function handleAddDayOff() {
+    if (!newDayOffDate || extraDayOffDates.includes(newDayOffDate)) {
+      return;
+    }
+
+    setExtraDayOffDates((current) =>
+      [...current, newDayOffDate].sort((left, right) => left.localeCompare(right)),
+    );
+    setNewDayOffDate('');
+  }
+
+  async function handleScheduleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setScheduleLoading(true);
+
+    try {
+      await updateEmployeeWorkSchedule(userId, {
+        weeklyRestDays,
+        workStartTime,
+        workEndTime,
+        extraDayOffDates,
+      });
+      await loadEmployee();
+      toast.success('Work schedule updated.');
+    } catch (submitError) {
+      toast.error(
+        submitError instanceof Error
+          ? submitError.message
+          : 'Unable to update work schedule.',
+      );
+    } finally {
+      setScheduleLoading(false);
+    }
+  }
+
   if (!team || !employee) {
     return (
       <div className="space-y-6 px-6 py-8">
@@ -182,7 +238,7 @@ export default function EmployeeDetailPage() {
 
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
           <h2 className="text-lg font-semibold text-white">Employment overview</h2>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <article className="rounded-xl bg-slate-950 p-4">
               <p className="text-xs uppercase tracking-[0.15em] text-slate-500">
                 Status
@@ -215,7 +271,129 @@ export default function EmployeeDetailPage() {
                 {formatDateLabel(employee.profile.hireDate)}
               </p>
             </article>
+            <article className="rounded-xl bg-slate-950 p-4">
+              <p className="text-xs uppercase tracking-[0.15em] text-slate-500">
+                Work schedule
+              </p>
+              <p className="mt-2 font-medium text-white">
+                {formatWorkSchedule(employee.profile.workSchedule)}
+              </p>
+            </article>
           </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+          <h2 className="text-lg font-semibold text-white">Work schedule</h2>
+          <p className="mt-2 text-sm text-slate-400">
+            Set weekly rest days and shift hours. Scheduled day offs are not
+            counted as absences in DTR.
+          </p>
+
+          <form className="mt-6 space-y-6" onSubmit={handleScheduleSubmit}>
+            <div className="space-y-3">
+              <p className="text-sm text-slate-300">Weekly rest days</p>
+              <div className="flex flex-wrap gap-2">
+                {WEEKDAY_OPTIONS.map((day) => {
+                  const selected = weeklyRestDays.includes(day.value);
+
+                  return (
+                    <button
+                      key={day.value}
+                      type="button"
+                      onClick={() => toggleRestDay(day.value)}
+                      className={`rounded-lg border px-3 py-2 text-sm transition ${
+                        selected
+                          ? 'border-sky-500/50 bg-sky-500/15 text-sky-300'
+                          : 'border-slate-700 bg-slate-950 text-slate-400 hover:border-slate-500 hover:text-white'
+                      }`}
+                    >
+                      {day.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="block space-y-2">
+                <span className="text-sm text-slate-300">Shift start</span>
+                <input
+                  type="time"
+                  required
+                  value={workStartTime}
+                  onChange={(event) => setWorkStartTime(event.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                />
+              </label>
+              <label className="block space-y-2">
+                <span className="text-sm text-slate-300">Shift end</span>
+                <input
+                  type="time"
+                  required
+                  value={workEndTime}
+                  onChange={(event) => setWorkEndTime(event.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                />
+              </label>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-sm text-slate-300">Extra day offs</p>
+              <p className="text-xs text-slate-500">
+                One-off holidays or special rest days outside the weekly schedule.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <input
+                  type="date"
+                  value={newDayOffDate}
+                  onChange={(event) => setNewDayOffDate(event.target.value)}
+                  className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddDayOff}
+                  className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 transition hover:border-slate-500 hover:text-white"
+                >
+                  Add day off
+                </button>
+              </div>
+              {extraDayOffDates.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {extraDayOffDates.map((date) => (
+                    <span
+                      key={date}
+                      className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-950 px-3 py-1 text-sm text-slate-300"
+                    >
+                      {formatDateLabel(date)}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExtraDayOffDates((current) =>
+                            current.filter((value) => value !== date),
+                          )
+                        }
+                        className="text-slate-500 transition hover:text-white"
+                        aria-label={`Remove ${date}`}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">No extra day offs set.</p>
+              )}
+            </div>
+
+            <LoadingButton
+              type="submit"
+              loading={scheduleLoading}
+              loadingText="Saving…"
+              className="rounded-lg bg-emerald-500 px-5 py-2.5 font-medium text-slate-950 transition hover:bg-emerald-400"
+            >
+              Save work schedule
+            </LoadingButton>
+          </form>
         </section>
 
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">

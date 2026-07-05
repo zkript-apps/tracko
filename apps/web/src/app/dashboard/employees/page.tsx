@@ -286,13 +286,15 @@ export default function EmployeesPage() {
                       </div>
                       <LoadingButton
                         type="button"
+                        variant="destructive"
+                        size="xs"
                         loading={cancellingId === invitation.id}
                         loadingText="Cancelling…"
                         onClick={() => handleCancelInvitation(invitation.id)}
                         disabled={
                           cancellingId !== null && cancellingId !== invitation.id
                         }
-                        className="shrink-0 rounded-lg border border-red-500/30 px-3 py-1.5 text-xs text-red-300 transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-200 disabled:opacity-50"
+                        className="shrink-0"
                       >
                         Cancel
                       </LoadingButton>

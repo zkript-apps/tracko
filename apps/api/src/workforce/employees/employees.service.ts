@@ -17,6 +17,7 @@ import {
   findProfileByUserId,
   serializeEmployeeProfile,
   updateEmployeeProfile,
+  updateEmployeeWorkSchedule,
   type EmploymentType,
 } from './employee-profiles.store';
 import {
@@ -27,6 +28,10 @@ import {
   type BalanceLeaveType,
 } from './leave-balances.store';
 import { isValidDateString, todayDateString, countLeaveDays } from './leave-days.util';
+import {
+  validateWorkScheduleInput,
+  serializeWorkSchedule,
+} from './work-schedule.util';
 import {
   listLeaveRequestsForUser,
   type LeaveRequest as LeaveRequestRecord,
@@ -285,6 +290,62 @@ export class EmployeesService {
     }
 
     return serializeEmployeeProfile(updated);
+  }
+
+  async updateWorkSchedule(
+    request: Request,
+    userId: string,
+    input: {
+      weeklyRestDays?: number[];
+      workStartTime?: string;
+      workEndTime?: string;
+      extraDayOffDates?: string[];
+    },
+  ) {
+    const context = await this.requireManager(request);
+    const assignment = await findAssignmentByUserId(
+      context.organizationId,
+      userId,
+    );
+
+    if (!assignment || assignment.role !== 'employee') {
+      throw new NotFoundException('Employee not found.');
+    }
+
+    this.assertEmployeeAccess(context, assignment.branchId);
+
+    let schedule;
+    try {
+      schedule = validateWorkScheduleInput(input);
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Invalid work schedule.',
+      );
+    }
+
+    await this.ensureEmployeeProfile({
+      organizationId: context.organizationId,
+      userId,
+      memberId: assignment.memberId,
+      branchId: assignment.branchId,
+      updatedBy: context.userId,
+    });
+
+    const updated = await updateEmployeeWorkSchedule({
+      organizationId: context.organizationId,
+      userId,
+      weeklyRestDays: schedule.weeklyRestDays,
+      workStartTime: schedule.workStartTime,
+      workEndTime: schedule.workEndTime,
+      extraDayOffDates: schedule.extraDayOffDates,
+      updatedBy: context.userId,
+    });
+
+    if (!updated) {
+      throw new NotFoundException('Employee profile not found.');
+    }
+
+    return serializeWorkSchedule(schedule);
   }
 
   async updateLeaveBalances(
