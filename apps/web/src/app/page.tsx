@@ -18,7 +18,7 @@ const tiers = [
 
 export default function HomePage() {
   return (
-    <div className="min-h-full bg-slate-950 text-slate-100">
+    <div className="min-h-screen bg-background text-slate-100">
       <header className="border-b border-slate-800">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
           <div>

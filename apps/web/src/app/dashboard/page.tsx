@@ -89,7 +89,7 @@ export default function DashboardPage() {
 
   if (!session) {
     return (
-      <div className="flex min-h-full flex-col items-center justify-center gap-4 bg-slate-950 text-center">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-950 text-center">
         <p className="text-slate-300">You need to sign in to access the admin panel.</p>
         <Link
           href="/sign-in"
@@ -115,7 +115,7 @@ export default function DashboardPage() {
   const branchLabel = currentMember?.branch?.name;
 
   return (
-    <div className="min-h-full bg-slate-950 text-slate-100">
+    <div className="min-h-screen bg-background text-slate-100">
       <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div>

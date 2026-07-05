@@ -11,7 +11,7 @@ export function PageLoader({ label = 'Loading…', className }: PageLoaderProps)
     <div
       role="status"
       className={cn(
-        'flex min-h-full flex-col items-center justify-center gap-3 bg-slate-950 text-slate-400',
+        'flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-950 text-slate-400',
         className,
       )}
     >

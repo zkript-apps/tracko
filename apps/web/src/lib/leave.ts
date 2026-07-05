@@ -106,13 +106,13 @@ export function formatLeaveStatus(status: string): string {
 export function getLeaveStatusClassName(status: string): string {
   switch (status) {
     case 'approved':
-      return 'bg-emerald-500/15 text-emerald-300';
+      return 'border-transparent bg-emerald-500/15 text-emerald-300';
     case 'rejected':
-      return 'bg-red-500/15 text-red-300';
+      return 'border-transparent bg-red-500/15 text-red-300';
     case 'pending':
-      return 'bg-amber-500/15 text-amber-300';
+      return 'border-transparent bg-amber-500/15 text-amber-300';
     default:
-      return 'bg-slate-800 text-slate-400';
+      return 'border-transparent bg-secondary text-muted-foreground';
   }
 }
 

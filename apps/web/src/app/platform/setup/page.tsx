@@ -57,7 +57,7 @@ export default function PlatformSetupPage() {
 
   if (!bootstrapConfigured) {
     return (
-      <div className="flex min-h-full flex-1 items-center justify-center bg-slate-950 px-4 py-12">
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-12">
         <div className="w-full max-w-md rounded-2xl border border-amber-500/20 bg-slate-900 p-8 text-center shadow-xl">
           <h1 className="text-2xl font-semibold text-white">Setup not configured</h1>
           <p className="mt-3 text-sm text-slate-400">
@@ -77,7 +77,7 @@ export default function PlatformSetupPage() {
   }
 
   return (
-    <div className="flex min-h-full flex-1 items-center justify-center bg-slate-950 px-4 py-12">
+    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-12">
       <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
         <div className="mb-8 space-y-2 text-center">
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-amber-400">

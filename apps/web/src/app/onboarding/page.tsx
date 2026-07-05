@@ -123,7 +123,7 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-full bg-slate-950 px-4 py-12 text-slate-100">
+    <div className="min-h-screen bg-background px-4 py-12 text-slate-100">
       <div className="mx-auto max-w-2xl">
         <div className="mb-8 space-y-2 text-center">
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-emerald-400">
