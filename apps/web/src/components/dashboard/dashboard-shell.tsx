@@ -10,8 +10,10 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  PhilippinePeso,
   UserCog,
   Users,
+  CalendarRange,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -73,6 +75,16 @@ function buildNavItems(team: TeamOverview): NavItem[] {
         href: '/dashboard/leave',
         label: 'Leave',
         icon: CalendarDays,
+      },
+      {
+        href: '/dashboard/payroll',
+        label: 'Payroll',
+        icon: PhilippinePeso,
+      },
+      {
+        href: '/dashboard/calendar',
+        label: 'Calendar',
+        icon: CalendarRange,
       },
     );
   }
@@ -167,7 +179,7 @@ function SidebarContent({
     <div className="flex h-full flex-col">
       <div className="px-4 py-5">
         <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">
-          WorkTrack
+          Tracko
         </p>
         <p className="mt-2 truncate text-sm font-semibold text-foreground">
           {team.organization.name}

@@ -115,7 +115,7 @@ export default function PlatformPage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div>
             <p className="text-xs uppercase tracking-[0.25em] text-amber-400">
-              WorkTrack Platform
+              Tracko Platform
             </p>
             <h1 className="text-lg font-semibold">Super admin console</h1>
           </div>

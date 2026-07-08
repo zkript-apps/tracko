@@ -5,6 +5,14 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { LoadingButton } from '@/components/ui/loading-button';
+import { Button } from '@/components/ui/button';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSession } from '@/lib/auth-client';
 import { buildAcceptInviteUrl } from '@/lib/invite-url';
@@ -22,6 +30,20 @@ import {
   type TeamOverview,
 } from '@/lib/team';
 
+function getHeadOfficeBranchId(team: TeamOverview): string {
+  return (
+    team.branches.find((branch) => branch.isHeadOffice)?._id ??
+    team.branches[0]?._id ??
+    ''
+  );
+}
+
+function formatBranchName(branch: TeamOverview['branches'][number]): string {
+  return `${branch.name}${branch.isHeadOffice ? ' (Head office)' : ''}${
+    branch.city ? ` — ${branch.city}` : ''
+  }`;
+}
+
 export default function EmployeesPage() {
   const router = useRouter();
   const { data: session } = useSession();
@@ -32,6 +54,8 @@ export default function EmployeesPage() {
   const [loading, setLoading] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [employeeRecords, setEmployeeRecords] = useState<EmployeeRecord[]>([]);
+  const [memberBranchFilter, setMemberBranchFilter] = useState('');
+  const [employeesSheetOpen, setEmployeesSheetOpen] = useState(false);
 
   const isAdmin = isOrgAdminRole(team?.currentMember?.role);
   const assignedBranchId = team?.currentMember?.assignedBranchId ?? null;
@@ -44,6 +68,37 @@ export default function EmployeesPage() {
       [],
     [team],
   );
+
+  const branchEmployees = useMemo(() => {
+    if (!memberBranchFilter) {
+      return [];
+    }
+
+    return employees.filter(
+      (employee) => employee.branchId === memberBranchFilter,
+    );
+  }, [employees, memberBranchFilter]);
+
+  const filteredPendingInvites = useMemo(() => {
+    if (!memberBranchFilter) {
+      return pendingInvites;
+    }
+
+    return pendingInvites.filter(
+      (invitation) => invitation.branch?.id === memberBranchFilter,
+    );
+  }, [memberBranchFilter, pendingInvites]);
+
+  const selectedBranch = useMemo(
+    () =>
+      team?.branches.find((branch) => branch._id === memberBranchFilter) ?? null,
+    [memberBranchFilter, team],
+  );
+
+  function handleBranchFilterChange(nextBranchId: string) {
+    setMemberBranchFilter(nextBranchId);
+    setEmployeesSheetOpen(false);
+  }
 
   const inviteBranch = useMemo(() => {
     if (!team) {
@@ -68,10 +123,17 @@ export default function EmployeesPage() {
 
         setTeam(overview);
 
-        if (overview.currentMember.assignedBranchId) {
-          setBranchId(overview.currentMember.assignedBranchId);
+        const defaultBranchId = isOrgAdminRole(overview.currentMember?.role)
+          ? getHeadOfficeBranchId(overview)
+          : overview.currentMember?.assignedBranchId ??
+            getHeadOfficeBranchId(overview);
+
+        if (defaultBranchId) {
+          setBranchId(defaultBranchId);
+          setMemberBranchFilter(defaultBranchId);
         } else if (overview.branches[0]) {
           setBranchId(overview.branches[0]._id);
+          setMemberBranchFilter(overview.branches[0]._id);
         }
 
         return listEmployeeRecords();
@@ -222,41 +284,57 @@ export default function EmployeesPage() {
 
         <section className="grid gap-8 lg:grid-cols-2">
           <div>
-            <h2 className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-slate-400">
-              Active employees
-            </h2>
-            <div className="space-y-3">
-              {employees.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-slate-800 p-4 text-sm text-slate-500">
-                  No employees yet. Send an invitation to get started.
-                </p>
-              ) : (
-                employees.map((employee) => (
-                  <Link
-                    key={employee.userId}
-                    href={`/dashboard/employees/${employee.userId}`}
-                    className="block rounded-xl border border-slate-800 bg-slate-900 p-4 transition hover:border-slate-700 hover:bg-slate-900/80"
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
+              <h2 className="text-sm font-medium uppercase tracking-[0.2em] text-slate-400">
+                Active employees
+              </h2>
+              {isAdmin ? (
+                <label className="block min-w-[16rem] flex-1 space-y-2 sm:max-w-md">
+                  <span className="text-xs text-slate-500">Branch</span>
+                  <select
+                    value={memberBranchFilter}
+                    onChange={(event) =>
+                      handleBranchFilterChange(event.target.value)
+                    }
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none ring-emerald-500 focus:ring-2"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-white">{employee.name}</p>
-                        <p className="text-sm text-slate-400">{employee.email}</p>
-                        <p className="mt-2 text-sm text-slate-500">
-                          {formatEmploymentType(employee.profile.employmentType)}
-                          {employee.profile.jobTitle
-                            ? ` · ${employee.profile.jobTitle}`
-                            : ''}
-                        </p>
-                        <p className="mt-1 text-sm text-slate-500">
-                          {formatEmploymentPeriod(employee.profile)}
-                        </p>
-                      </div>
-                      <span className="rounded-full bg-slate-800 px-2.5 py-1 text-xs text-emerald-300">
-                        View record
-                      </span>
-                    </div>
-                  </Link>
-                ))
+                    {team.branches.map((branch) => (
+                      <option key={branch._id} value={branch._id}>
+                        {formatBranchName(branch)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+            </div>
+
+            <div className="space-y-3">
+              <article className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+                <p className="text-sm text-slate-400">Employees</p>
+                <p className="mt-2 text-2xl font-semibold text-white">
+                  {branchEmployees.length}
+                </p>
+                <p className="mt-1 text-sm text-slate-500">
+                  {branchEmployees.length === 1
+                    ? 'employee in this branch'
+                    : 'employees in this branch'}
+                </p>
+              </article>
+
+              {branchEmployees.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setEmployeesSheetOpen(true)}
+                >
+                  View all employees
+                </Button>
+              ) : (
+                <p className="rounded-xl border border-dashed border-slate-800 p-4 text-sm text-slate-500">
+                  No employees in this branch yet. Send an invitation to get
+                  started.
+                </p>
               )}
             </div>
           </div>
@@ -266,12 +344,13 @@ export default function EmployeesPage() {
               Pending invitations
             </h2>
             <div className="space-y-3">
-              {pendingInvites.length === 0 ? (
+              {filteredPendingInvites.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-slate-800 p-4 text-sm text-slate-500">
-                  No pending employee invitations.
+                  No pending employee invitations
+                  {isAdmin ? ' for this branch' : ''}.
                 </p>
               ) : (
-                pendingInvites.map((invitation) => (
+                filteredPendingInvites.map((invitation) => (
                   <article
                     key={invitation.id}
                     className="rounded-xl border border-slate-800 bg-slate-900 p-4"
@@ -308,6 +387,63 @@ export default function EmployeesPage() {
             </div>
           </div>
         </section>
+
+      <Sheet open={employeesSheetOpen} onOpenChange={setEmployeesSheetOpen}>
+        <SheetContent
+          className="gap-0 overflow-x-hidden overflow-y-auto p-0 sm:max-w-none"
+          style={{ width: 'min(960px, 92vw)', maxWidth: '92vw' }}
+        >
+          <SheetHeader className="border-b border-border px-6 pb-4 pt-4">
+            <SheetTitle>
+              {selectedBranch ? selectedBranch.name : 'Branch employees'}
+            </SheetTitle>
+            <SheetDescription>
+              {branchEmployees.length} employee
+              {branchEmployees.length === 1 ? '' : 's'} in this branch
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="space-y-3 px-6 pt-6 pb-6">
+            {branchEmployees.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                No employees assigned to this branch.
+              </p>
+            ) : (
+              branchEmployees.map((employee) => (
+                <Link
+                  key={employee.userId}
+                  href={`/dashboard/employees/${employee.userId}`}
+                  className="block rounded-xl border border-border bg-card p-4 transition hover:border-primary/40"
+                  onClick={() => setEmployeesSheetOpen(false)}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium text-foreground">
+                        {employee.name}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {employee.email}
+                      </p>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {formatEmploymentType(employee.profile.employmentType)}
+                        {employee.profile.jobTitle
+                          ? ` · ${employee.profile.jobTitle}`
+                          : ''}
+                      </p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {formatEmploymentPeriod(employee.profile)}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-primary/15 px-2.5 py-1 text-xs text-primary">
+                      View record
+                    </span>
+                  </div>
+                </Link>
+              ))
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

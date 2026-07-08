@@ -17,10 +17,6 @@ const modules = [
     description: 'Monitor field teams and geofence alerts in real time.',
   },
   {
-    title: 'Payroll',
-    description: 'Compute payroll from attendance with overtime and deductions.',
-  },
-  {
     title: 'Employee Records',
     description: 'Profiles, documents, and linked attendance history.',
   },
@@ -112,6 +108,12 @@ export default function DashboardPage() {
                 className="inline-flex rounded-lg border border-primary/40 px-4 py-2 text-sm font-medium text-primary transition hover:border-primary hover:bg-primary/10"
               >
                 Review leave
+              </Link>
+              <Link
+                href="/dashboard/payroll"
+                className="inline-flex rounded-lg border border-primary/40 px-4 py-2 text-sm font-medium text-primary transition hover:border-primary hover:bg-primary/10"
+              >
+                Run payroll
               </Link>
             </>
           ) : null}

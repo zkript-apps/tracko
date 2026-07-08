@@ -72,7 +72,7 @@ export default function SignInPage() {
       <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
         <div className="mb-8 space-y-2 text-center">
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-emerald-400">
-            WorkTrack
+            Tracko
           </p>
           <h1 className="text-2xl font-semibold text-white">Sign in</h1>
           <p className="text-sm text-slate-400">

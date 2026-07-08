@@ -20,17 +20,20 @@ import { Textarea } from '@/components/ui/textarea';
 import { useSession } from '@/lib/auth-client';
 import {
   EMPLOYMENT_TYPES,
+  PAY_RATE_TYPES,
   formatDateLabel,
   formatEmploymentPeriod,
   formatEmploymentType,
   formatWorkSchedule,
   getEmployeeRecord,
   updateEmployeeLeaveBalances,
+  updateEmployeeCompensation,
   updateEmployeeProfile,
   updateEmployeeWorkSchedule,
   WEEKDAY_OPTIONS,
   type EmployeeDetail,
   type EmploymentType,
+  type PayRateType,
 } from '@/lib/employees';
 import { formatLeaveType, BALANCE_LEAVE_TYPES, formatLeaveStatus, getLeaveStatusClassName } from '@/lib/leave';
 import { getTeamOverview, type TeamOverview } from '@/lib/team';
@@ -52,6 +55,8 @@ export default function EmployeeDetailPage() {
   const [contractEndDate, setContractEndDate] = useState('');
   const [probationEndDate, setProbationEndDate] = useState('');
   const [notes, setNotes] = useState('');
+  const [payRateType, setPayRateType] = useState<PayRateType>('monthly');
+  const [payRateAmount, setPayRateAmount] = useState('');
   const [balanceInputs, setBalanceInputs] = useState<Record<string, number>>({
     vacation: 0,
     sick: 0,
@@ -63,6 +68,7 @@ export default function EmployeeDetailPage() {
   const [extraDayOffDates, setExtraDayOffDates] = useState<string[]>([]);
   const [newDayOffDate, setNewDayOffDate] = useState('');
   const [profileLoading, setProfileLoading] = useState(false);
+  const [compensationLoading, setCompensationLoading] = useState(false);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [scheduleLoading, setScheduleLoading] = useState(false);
 
@@ -76,6 +82,16 @@ export default function EmployeeDetailPage() {
     setContractEndDate(record.profile.contractEndDate ?? '');
     setProbationEndDate(record.profile.probationEndDate ?? '');
     setNotes(record.profile.notes ?? '');
+    setPayRateType(record.profile.payRate?.type ?? 'monthly');
+    setPayRateAmount(
+      record.profile.payRate?.amount !== null &&
+        record.profile.payRate?.amount !== undefined
+        ? String(record.profile.payRate.amount)
+        : record.profile.monthlySalary !== null &&
+            record.profile.monthlySalary !== undefined
+          ? String(record.profile.monthlySalary)
+          : '',
+    );
     setWeeklyRestDays(record.profile.workSchedule.weeklyRestDays);
     setWorkStartTime(record.profile.workSchedule.workStartTime);
     setWorkEndTime(record.profile.workSchedule.workEndTime);
@@ -150,6 +166,37 @@ export default function EmployeeDetailPage() {
       );
     } finally {
       setProfileLoading(false);
+    }
+  }
+
+  async function handleCompensationSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setCompensationLoading(true);
+
+    try {
+      const parsedAmount = payRateAmount.trim() ? Number(payRateAmount) : null;
+
+      if (
+        parsedAmount !== null &&
+        (!Number.isFinite(parsedAmount) || parsedAmount < 0)
+      ) {
+        throw new Error('Pay rate must be zero or greater.');
+      }
+
+      await updateEmployeeCompensation(userId, {
+        payRateType: parsedAmount === null ? null : payRateType,
+        payRateAmount: parsedAmount,
+      });
+      await loadEmployee();
+      toast.success('Compensation updated.');
+    } catch (submitError) {
+      toast.error(
+        submitError instanceof Error
+          ? submitError.message
+          : 'Unable to update compensation.',
+      );
+    } finally {
+      setCompensationLoading(false);
     }
   }
 
@@ -499,6 +546,71 @@ export default function EmployeeDetailPage() {
 
             <LoadingButton type="submit" loading={profileLoading} loadingText="Saving…">
               Save profile
+            </LoadingButton>
+          </form>
+        </section>
+
+        <section className="rounded-2xl border border-border bg-card p-6">
+          <h2 className="text-lg font-semibold text-foreground">Pay rate</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Set how this employee is paid — per hour or a fixed monthly amount.
+            Used for payroll and holiday premium calculations.
+          </p>
+
+          <form className="mt-6 space-y-4" onSubmit={handleCompensationSubmit}>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="pay-rate-type">Rate type</Label>
+                <Select
+                  value={payRateType}
+                  onValueChange={(value) =>
+                    setPayRateType(value as PayRateType)
+                  }
+                >
+                  <SelectTrigger id="pay-rate-type" className="w-full">
+                    <SelectValue placeholder="Select rate type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAY_RATE_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="pay-rate-amount">
+                  {payRateType === 'hourly'
+                    ? 'Hourly rate (PHP)'
+                    : 'Monthly rate (PHP)'}
+                </Label>
+                <Input
+                  id="pay-rate-amount"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={payRateAmount}
+                  onChange={(event) => setPayRateAmount(event.target.value)}
+                  placeholder={
+                    payRateType === 'hourly' ? 'e.g. 85' : 'e.g. 25000'
+                  }
+                />
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Leave the amount blank if pay rate is not set yet. Payroll will
+              flag this employee.
+            </p>
+
+            <LoadingButton
+              type="submit"
+              loading={compensationLoading}
+              loadingText="Saving…"
+            >
+              Save pay rate
             </LoadingButton>
           </form>
         </section>

@@ -43,6 +43,19 @@ export function resolveWorkSchedule(input?: Partial<WorkSchedule> | null): WorkS
   };
 }
 
+export function scheduledMinutesPerDay(schedule: WorkSchedule): number {
+  const [startHour, startMinute] = schedule.workStartTime.split(':').map(Number);
+  const [endHour, endMinute] = schedule.workEndTime.split(':').map(Number);
+  return endHour * 60 + endMinute - (startHour * 60 + startMinute);
+}
+
+export function countScheduledWorkDays(
+  dates: string[],
+  schedule: WorkSchedule,
+): number {
+  return dates.filter((date) => !isScheduledDayOff(date, schedule)).length;
+}
+
 export function isScheduledDayOff(date: string, schedule: WorkSchedule): boolean {
   if (schedule.extraDayOffDates.includes(date)) {
     return true;

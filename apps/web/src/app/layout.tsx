@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Tracko — WorkTrack Admin',
+  title: 'Tracko',
   description:
     'Multi-tenant SaaS for time tracking, DTR, leave management, and payroll in the Philippines.',
 };

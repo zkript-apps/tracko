@@ -16,7 +16,9 @@ import {
 } from './leave-balances.store';
 import {
   EMPLOYMENT_TYPES,
+  PAY_RATE_TYPES,
   type EmploymentType,
+  type PayRateType,
 } from './employee-profiles.store';
 import { EmployeesService } from './employees.service';
 
@@ -45,6 +47,11 @@ class UpdateWorkScheduleDto {
   workStartTime?: string;
   workEndTime?: string;
   extraDayOffDates?: string[];
+}
+
+class UpdateCompensationDto {
+  payRateType!: PayRateType | null;
+  payRateAmount!: number | null;
 }
 
 @Controller('employees')
@@ -122,5 +129,27 @@ export class EmployeesController {
     @Body() body: UpdateWorkScheduleDto,
   ) {
     return this.employees.updateWorkSchedule(request, userId, body);
+  }
+
+  @Patch(':userId/compensation')
+  updateCompensation(
+    @Req() request: Request,
+    @Param('userId') userId: string,
+    @Body() body: UpdateCompensationDto,
+  ) {
+    if (body.payRateType && !PAY_RATE_TYPES.includes(body.payRateType)) {
+      throw new BadRequestException('Invalid pay rate type.');
+    }
+
+    if (body.payRateAmount !== null && body.payRateAmount !== undefined) {
+      if (!Number.isFinite(body.payRateAmount)) {
+        throw new BadRequestException('Pay rate amount must be a number.');
+      }
+    }
+
+    return this.employees.updateCompensation(request, userId, {
+      payRateType: body.payRateType ?? null,
+      payRateAmount: body.payRateAmount ?? null,
+    });
   }
 }

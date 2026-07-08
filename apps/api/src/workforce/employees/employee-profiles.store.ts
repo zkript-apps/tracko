@@ -7,6 +7,9 @@ import {
   type Weekday,
   type WorkSchedule,
 } from './work-schedule.util';
+import { PAY_RATE_TYPES, serializePayRate, type PayRateType } from './pay-rate.util';
+
+export { PAY_RATE_TYPES, type PayRateType };
 
 export const EMPLOYMENT_TYPES = [
   'full_time',
@@ -34,6 +37,9 @@ export interface EmployeeProfile {
   workStartTime?: string;
   workEndTime?: string;
   extraDayOffDates?: string[];
+  monthlySalary?: number;
+  payRateType?: PayRateType;
+  payRateAmount?: number;
   createdAt: Date;
   updatedAt: Date;
   updatedBy?: string;
@@ -218,6 +224,61 @@ export async function updateEmployeeWorkSchedule(input: {
   return result ?? null;
 }
 
+export async function updateEmployeeCompensation(input: {
+  organizationId: string;
+  userId: string;
+  payRateType: PayRateType | null;
+  payRateAmount: number | null;
+  updatedBy: string;
+}): Promise<EmployeeProfile | null> {
+  const collection = await getCollection();
+  const filter = {
+    organizationId: String(input.organizationId),
+    userId: String(input.userId),
+  };
+  const meta = {
+    updatedAt: new Date(),
+    updatedBy: input.updatedBy,
+  };
+
+  if (!input.payRateType || input.payRateAmount === null) {
+    const result = await collection.findOneAndUpdate(
+      filter,
+      {
+        $unset: {
+          payRateType: '',
+          payRateAmount: '',
+          monthlySalary: '',
+        },
+        $set: meta,
+      },
+      { returnDocument: 'after' },
+    );
+    return result ?? null;
+  }
+
+  const updates: Partial<EmployeeProfile> = {
+    ...meta,
+    payRateType: input.payRateType,
+    payRateAmount: input.payRateAmount,
+  };
+
+  if (input.payRateType === 'monthly') {
+    updates.monthlySalary = input.payRateAmount;
+  }
+
+  const result = await collection.findOneAndUpdate(
+    filter,
+    {
+      $set: updates,
+      ...(input.payRateType === 'hourly' ? { $unset: { monthlySalary: '' } } : {}),
+    },
+    { returnDocument: 'after' },
+  );
+
+  return result ?? null;
+}
+
 export function getProfileWorkSchedule(profile: EmployeeProfile): WorkSchedule {
   return resolveWorkSchedule({
     weeklyRestDays: profile.weeklyRestDays,
@@ -242,6 +303,8 @@ export function serializeEmployeeProfile(profile: EmployeeProfile) {
     probationEndDate: profile.probationEndDate ?? null,
     notes: profile.notes ?? null,
     workSchedule: serializeWorkSchedule(workSchedule),
+    payRate: serializePayRate(profile),
+    monthlySalary: profile.monthlySalary ?? null,
     updatedAt: profile.updatedAt.toISOString(),
   };
 }

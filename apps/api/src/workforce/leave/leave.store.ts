@@ -112,6 +112,27 @@ export async function listLeaveRequestsForOrganization(input: {
   return collection.find(filter).sort({ createdAt: -1 }).toArray();
 }
 
+export async function listApprovedLeaveOverlappingPeriod(input: {
+  organizationId: string;
+  startDate: string;
+  endDate: string;
+  branchId?: string;
+}): Promise<LeaveRequest[]> {
+  const collection = await getCollection();
+  const filter: Record<string, unknown> = {
+    organizationId: input.organizationId,
+    status: 'approved',
+    startDate: { $lte: input.endDate },
+    endDate: { $gte: input.startDate },
+  };
+
+  if (input.branchId) {
+    filter.branchId = input.branchId;
+  }
+
+  return collection.find(filter).sort({ startDate: 1 }).toArray();
+}
+
 export async function updateLeaveRequestStatus(input: {
   id: string;
   status: LeaveStatus;

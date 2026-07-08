@@ -8,6 +8,13 @@ export const EMPLOYMENT_TYPES = [
   { value: 'probation', label: 'Probation' },
 ] as const;
 
+export const PAY_RATE_TYPES = [
+  { value: 'hourly', label: 'Per hour' },
+  { value: 'monthly', label: 'Fixed per month' },
+] as const;
+
+export type PayRateType = (typeof PAY_RATE_TYPES)[number]['value'];
+
 export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number]['value'];
 
 export type WorkSchedule = {
@@ -27,6 +34,11 @@ export const WEEKDAY_OPTIONS = [
   { value: 6, label: 'Sat' },
 ] as const;
 
+export type PayRate = {
+  type: PayRateType;
+  amount: number;
+} | null;
+
 export type EmployeeProfile = {
   userId: string;
   memberId: string;
@@ -39,6 +51,8 @@ export type EmployeeProfile = {
   probationEndDate: string | null;
   notes: string | null;
   workSchedule: WorkSchedule;
+  payRate: PayRate;
+  monthlySalary: number | null;
   updatedAt: string;
 };
 
@@ -123,6 +137,19 @@ export async function updateEmployeeWorkSchedule(
   input: WorkSchedule,
 ): Promise<WorkSchedule> {
   return apiFetch(`/employees/${encodeURIComponent(userId)}/work-schedule`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateEmployeeCompensation(
+  userId: string,
+  input: {
+    payRateType: PayRateType | null;
+    payRateAmount: number | null;
+  },
+): Promise<EmployeeProfile> {
+  return apiFetch(`/employees/${encodeURIComponent(userId)}/compensation`, {
     method: 'PATCH',
     body: JSON.stringify(input),
   });

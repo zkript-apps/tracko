@@ -6,7 +6,7 @@ export type SendEmailInput = {
 };
 
 function getEmailFrom(): string {
-  return process.env.EMAIL_FROM ?? 'WorkTrack <onboarding@resend.dev>';
+  return process.env.EMAIL_FROM ?? 'Tracko <onboarding@resend.dev>';
 }
 
 export async function sendEmail(input: SendEmailInput): Promise<void> {
@@ -57,7 +57,7 @@ function invitationEmailLayout(
           <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#0f172a;border:1px solid #1e293b;border-radius:16px;padding:32px;">
             <tr>
               <td>
-                <p style="margin:0 0 8px;font-size:12px;letter-spacing:0.2em;text-transform:uppercase;color:#34d399;">WorkTrack</p>
+                <p style="margin:0 0 8px;font-size:12px;letter-spacing:0.2em;text-transform:uppercase;color:#34d399;">Tracko</p>
                 <h1 style="margin:0 0 16px;font-size:24px;color:#ffffff;">${title}</h1>
                 ${bodyHtml}
                 <p style="margin:24px 0 0;">
@@ -81,17 +81,17 @@ export async function sendAdminInvitationEmail(input: {
 }): Promise<void> {
   const planLabel =
     input.planTier.charAt(0).toUpperCase() + input.planTier.slice(1);
-  const text = `You have been invited to set up your WorkTrack organization (${planLabel} plan). Accept your invitation: ${input.signupUrl}`;
+  const text = `You have been invited to set up your Tracko organization (${planLabel} plan). Accept your invitation: ${input.signupUrl}`;
   const html = invitationEmailLayout(
     'Set up your organization',
-    `<p style="margin:0;color:#cbd5e1;line-height:1.6;">You have been invited to create your organization admin account on WorkTrack.</p>
+    `<p style="margin:0;color:#cbd5e1;line-height:1.6;">You have been invited to create your organization admin account on Tracko.</p>
      <p style="margin:16px 0 0;color:#94a3b8;">Plan: <strong style="color:#e2e8f0;">${planLabel}</strong></p>`,
     input.signupUrl,
   );
 
   await sendEmail({
     to: input.email,
-    subject: 'Your WorkTrack organization invitation',
+    subject: 'Your Tracko organization invitation',
     html,
     text,
   });
@@ -121,7 +121,7 @@ export async function sendOrgInvitationEmail(input: {
 
   await sendEmail({
     to: input.email,
-    subject: `You're invited to join ${orgLabel} on WorkTrack`,
+    subject: `You're invited to join ${orgLabel} on Tracko`,
     html,
     text,
   });

@@ -14,11 +14,14 @@ import { WorkforceContextService } from '../workforce-context.service';
 import {
   createEmployeeProfile,
   EMPLOYMENT_TYPES,
+  PAY_RATE_TYPES,
   findProfileByUserId,
   serializeEmployeeProfile,
   updateEmployeeProfile,
+  updateEmployeeCompensation,
   updateEmployeeWorkSchedule,
   type EmploymentType,
+  type PayRateType,
 } from './employee-profiles.store';
 import {
   BALANCE_LEAVE_TYPES,
@@ -346,6 +349,66 @@ export class EmployeesService {
     }
 
     return serializeWorkSchedule(schedule);
+  }
+
+  async updateCompensation(
+    request: Request,
+    userId: string,
+    input: { payRateType: PayRateType | null; payRateAmount: number | null },
+  ) {
+    const context = await this.requireManager(request);
+    const assignment = await findAssignmentByUserId(
+      context.organizationId,
+      userId,
+    );
+
+    if (!assignment || assignment.role !== 'employee') {
+      throw new NotFoundException('Employee not found.');
+    }
+
+    this.assertEmployeeAccess(context, assignment.branchId);
+
+    if (input.payRateType && !PAY_RATE_TYPES.includes(input.payRateType)) {
+      throw new BadRequestException('Invalid pay rate type.');
+    }
+
+    if (
+      input.payRateAmount !== null &&
+      (!Number.isFinite(input.payRateAmount) || input.payRateAmount < 0)
+    ) {
+      throw new BadRequestException('Pay rate amount must be zero or greater.');
+    }
+
+    if (
+      (input.payRateType && input.payRateAmount === null) ||
+      (!input.payRateType && input.payRateAmount !== null)
+    ) {
+      throw new BadRequestException(
+        'Pay rate type and amount must both be set or both be cleared.',
+      );
+    }
+
+    await this.ensureEmployeeProfile({
+      organizationId: context.organizationId,
+      userId,
+      memberId: assignment.memberId,
+      branchId: assignment.branchId,
+      updatedBy: context.userId,
+    });
+
+    const updated = await updateEmployeeCompensation({
+      organizationId: context.organizationId,
+      userId,
+      payRateType: input.payRateType,
+      payRateAmount: input.payRateAmount,
+      updatedBy: context.userId,
+    });
+
+    if (!updated) {
+      throw new NotFoundException('Employee profile not found.');
+    }
+
+    return serializeEmployeeProfile(updated);
   }
 
   async updateLeaveBalances(

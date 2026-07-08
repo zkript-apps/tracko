@@ -236,7 +236,7 @@ export default function EmployeePage() {
         <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
           <div>
             <p className="text-xs uppercase tracking-[0.25em] text-emerald-400">
-              WorkTrack
+              Tracko
             </p>
             <h1 className="text-lg font-semibold">Employee portal</h1>
           </div>
