@@ -1,4 +1,5 @@
 import { apiFetch } from './api';
+import type { AuthenticationResponseJSON } from '@simplewebauthn/browser';
 
 export type AttendanceEvent = {
   id: string;
@@ -7,6 +8,8 @@ export type AttendanceEvent = {
   branchId: string;
   latitude: number | null;
   longitude: number | null;
+  verificationMethod: 'webauthn' | 'none' | null;
+  biometricVerified: boolean;
 };
 
 export type AttendanceStatus = {
@@ -34,6 +37,7 @@ export async function getMyAttendanceStatus(): Promise<AttendanceStatus> {
 export async function clockIn(input?: {
   latitude?: number;
   longitude?: number;
+  biometricResponse?: AuthenticationResponseJSON;
 }): Promise<AttendanceEvent> {
   return apiFetch('/attendance/me/clock-in', {
     method: 'POST',
@@ -44,6 +48,7 @@ export async function clockIn(input?: {
 export async function clockOut(input?: {
   latitude?: number;
   longitude?: number;
+  biometricResponse?: AuthenticationResponseJSON;
 }): Promise<AttendanceEvent> {
   return apiFetch('/attendance/me/clock-out', {
     method: 'POST',

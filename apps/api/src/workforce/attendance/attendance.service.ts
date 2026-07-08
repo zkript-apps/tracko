@@ -4,12 +4,15 @@ import {
   Injectable,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
 import { getMongoDb } from '../../database/mongo';
 import {
   listAssignmentsByOrganization,
   type BranchAssignment,
 } from '../../organizations/branch-assignments.store';
 import { WorkforceContextService } from '../workforce-context.service';
+import { AttendanceBiometricsService } from './attendance-biometrics.service';
+import { listBiometricCredentialsForUser } from './biometric-credentials.store';
 import {
   createAttendanceEvent,
   findLatestAttendanceEvent,
@@ -20,6 +23,7 @@ import {
   startOfLocalDay,
   type AttendanceEvent,
 } from './attendance.store';
+import { isAttendanceBiometricsRequired } from './webauthn.config';
 
 function serializeEvent(event: AttendanceEvent) {
   return {
@@ -29,12 +33,17 @@ function serializeEvent(event: AttendanceEvent) {
     branchId: event.branchId,
     latitude: event.latitude ?? null,
     longitude: event.longitude ?? null,
+    verificationMethod: event.verificationMethod ?? null,
+    biometricVerified: event.biometricVerified ?? false,
   };
 }
 
 @Injectable()
 export class AttendanceService {
-  constructor(private readonly workforce: WorkforceContextService) {}
+  constructor(
+    private readonly workforce: WorkforceContextService,
+    private readonly biometrics: AttendanceBiometricsService,
+  ) {}
 
   async getMyStatus(request: Request) {
     const context = await this.workforce.requireEmployee(request);
@@ -59,7 +68,11 @@ export class AttendanceService {
 
   async clockIn(
     request: Request,
-    input: { latitude?: number; longitude?: number },
+    input: {
+      latitude?: number;
+      longitude?: number;
+      biometricResponse?: AuthenticationResponseJSON;
+    },
   ) {
     const context = await this.workforce.requireEmployee(request);
     const latest = await findLatestAttendanceEvent(
@@ -71,6 +84,11 @@ export class AttendanceService {
       throw new BadRequestException('You are already clocked in.');
     }
 
+    const verification = await this.resolveClockVerification(
+      request,
+      input.biometricResponse,
+    );
+
     const event = await createAttendanceEvent({
       organizationId: context.organizationId,
       userId: context.userId,
@@ -78,6 +96,9 @@ export class AttendanceService {
       type: 'clock_in',
       latitude: input.latitude,
       longitude: input.longitude,
+      verificationMethod: verification.verificationMethod,
+      biometricVerified: verification.biometricVerified,
+      credentialId: verification.credentialId,
     });
 
     return serializeEvent(event);
@@ -85,7 +106,11 @@ export class AttendanceService {
 
   async clockOut(
     request: Request,
-    input: { latitude?: number; longitude?: number },
+    input: {
+      latitude?: number;
+      longitude?: number;
+      biometricResponse?: AuthenticationResponseJSON;
+    },
   ) {
     const context = await this.workforce.requireEmployee(request);
     const latest = await findLatestAttendanceEvent(
@@ -97,6 +122,11 @@ export class AttendanceService {
       throw new BadRequestException('You are not clocked in.');
     }
 
+    const verification = await this.resolveClockVerification(
+      request,
+      input.biometricResponse,
+    );
+
     const event = await createAttendanceEvent({
       organizationId: context.organizationId,
       userId: context.userId,
@@ -104,9 +134,66 @@ export class AttendanceService {
       type: 'clock_out',
       latitude: input.latitude,
       longitude: input.longitude,
+      verificationMethod: verification.verificationMethod,
+      biometricVerified: verification.biometricVerified,
+      credentialId: verification.credentialId,
     });
 
     return serializeEvent(event);
+  }
+
+  private async resolveClockVerification(
+    request: Request,
+    biometricResponse?: AuthenticationResponseJSON,
+  ): Promise<{
+    verificationMethod: 'webauthn' | 'none';
+    biometricVerified: boolean;
+    credentialId?: string;
+  }> {
+    const context = await this.workforce.requireEmployee(request);
+    const credentials = await listBiometricCredentialsForUser(
+      context.organizationId,
+      context.userId,
+    );
+    const biometricsRequired =
+      isAttendanceBiometricsRequired() && credentials.length > 0;
+
+    if (biometricsRequired) {
+      if (!biometricResponse) {
+        throw new BadRequestException(
+          'Biometric verification is required to clock in or out.',
+        );
+      }
+
+      const verification = await this.biometrics.verifyAuthenticationForClock(
+        request,
+        biometricResponse,
+      );
+
+      return {
+        verificationMethod: 'webauthn',
+        biometricVerified: true,
+        credentialId: verification.credentialId,
+      };
+    }
+
+    if (biometricResponse) {
+      const verification = await this.biometrics.verifyAuthenticationForClock(
+        request,
+        biometricResponse,
+      );
+
+      return {
+        verificationMethod: 'webauthn',
+        biometricVerified: true,
+        credentialId: verification.credentialId,
+      };
+    }
+
+    return {
+      verificationMethod: 'none',
+      biometricVerified: false,
+    };
   }
 
   async getBranchOverview(request: Request, branchId?: string) {

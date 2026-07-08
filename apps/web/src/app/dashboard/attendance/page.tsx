@@ -164,6 +164,7 @@ export default function AttendancePage() {
                   <p className="mt-1 text-sm text-muted-foreground">
                     Last {employee.lastEvent.type.replace('_', ' ')} ·{' '}
                     {formatAttendanceTime(employee.lastEvent.recordedAt)}
+                    {employee.lastEvent.biometricVerified ? ' · Biometric verified' : ''}
                   </p>
                 ) : (
                   <p className="mt-1 text-sm text-muted-foreground">

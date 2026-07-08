@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Fingerprint, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
 import { LoadingButton } from '@/components/ui/loading-button';
@@ -14,6 +15,13 @@ import {
   getMyAttendanceStatus,
   type AttendanceStatus,
 } from '@/lib/attendance';
+import {
+  authenticateWithBiometric,
+  getBiometricStatus,
+  getBiometricSupport,
+  registerBiometricCredential,
+  type BiometricStatus,
+} from '@/lib/biometrics';
 import {
   defaultDtrRange,
   formatDtrDate,
@@ -78,6 +86,14 @@ export default function EmployeePage() {
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
   const [clockLoading, setClockLoading] = useState(false);
+  const [biometricLoading, setBiometricLoading] = useState(false);
+  const [biometricStatus, setBiometricStatus] = useState<BiometricStatus | null>(
+    null,
+  );
+  const [biometricSupport, setBiometricSupport] = useState<{
+    supported: boolean;
+    platformAvailable: boolean;
+  } | null>(null);
   const [leaveLoading, setLeaveLoading] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
@@ -97,16 +113,21 @@ export default function EmployeePage() {
   }, [leaveType, selectableLeaveTypes]);
 
   const loadWorkforceData = useCallback(async () => {
-    const [status, requests, balances, dtr] = await Promise.all([
+    const [status, requests, balances, dtr, biometrics, support] =
+      await Promise.all([
       getMyAttendanceStatus(),
       getMyLeaveRequests(),
       getMyLeaveBalances(),
       getMyDtrRecords(dtrRange),
+      getBiometricStatus(),
+      getBiometricSupport(),
     ]);
     setAttendance(status);
     setLeaveRequests(requests);
     setLeaveBalances(balances.leaveBalances);
     setDtrRecords(dtr.records);
+    setBiometricStatus(biometrics);
+    setBiometricSupport(support);
   }, [dtrRange]);
 
   useEffect(() => {
@@ -151,17 +172,54 @@ export default function EmployeePage() {
       .catch(() => toast.error('Unable to load daily time records.'));
   }, [dtrRange, team]);
 
+  async function handleRegisterBiometric() {
+    setBiometricLoading(true);
+
+    try {
+      await registerBiometricCredential();
+      const status = await getBiometricStatus();
+      setBiometricStatus(status);
+      toast.success('Biometric clock-in is ready on this device.');
+    } catch (registerError) {
+      toast.error(
+        registerError instanceof Error
+          ? registerError.message
+          : 'Unable to set up biometrics.',
+      );
+    } finally {
+      setBiometricLoading(false);
+    }
+  }
+
   async function handleClock(action: 'in' | 'out') {
     setClockLoading(true);
 
     try {
+      if (
+        biometricStatus?.biometricsRequired &&
+        biometricSupport?.platformAvailable &&
+        !biometricStatus.enrolled
+      ) {
+        toast.error('Set up biometric clock-in before continuing.');
+        return;
+      }
+
       const location = await getOptionalLocation();
+      const payload: {
+        latitude?: number;
+        longitude?: number;
+        biometricResponse?: Awaited<ReturnType<typeof authenticateWithBiometric>>;
+      } = { ...location };
+
+      if (biometricStatus?.enrolled) {
+        payload.biometricResponse = await authenticateWithBiometric();
+      }
 
       if (action === 'in') {
-        await clockIn(location);
+        await clockIn(payload);
         toast.success('Clocked in successfully.');
       } else {
-        await clockOut(location);
+        await clockOut(payload);
         toast.success('Clocked out successfully.');
       }
 
@@ -229,6 +287,10 @@ export default function EmployeePage() {
     (member) => member.userId === session.user.id,
   );
   const branchLabel = currentMember?.branch?.name;
+  const mustEnrollBiometrics =
+    Boolean(biometricStatus?.biometricsRequired) &&
+    Boolean(biometricSupport?.platformAvailable) &&
+    !biometricStatus?.enrolled;
 
   return (
     <div className="min-h-screen bg-background text-slate-100">
@@ -266,11 +328,54 @@ export default function EmployeePage() {
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
+                <Fingerprint className="size-5 text-emerald-400" />
+                Biometric clock-in
+              </h2>
+              <p className="mt-2 text-sm text-slate-400">
+                {biometricSupport?.platformAvailable
+                  ? biometricStatus?.enrolled
+                    ? 'Use Face ID, fingerprint, or Windows Hello when you clock in or out.'
+                    : 'Register this device so attendance is verified with biometrics.'
+                  : 'This device does not support platform biometrics. You can still clock in without them.'}
+              </p>
+            </div>
+            {biometricStatus?.enrolled ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs text-emerald-300">
+                <ShieldCheck className="size-3.5" />
+                Enrolled
+              </span>
+            ) : null}
+          </div>
+
+          {biometricSupport?.platformAvailable && !biometricStatus?.enrolled ? (
+            <LoadingButton
+              type="button"
+              loading={biometricLoading}
+              loadingText="Setting up…"
+              onClick={handleRegisterBiometric}
+              className="mt-6 rounded-lg bg-emerald-500 px-5 py-2.5 font-medium text-slate-950 transition hover:bg-emerald-400"
+            >
+              <Fingerprint className="size-4" />
+              Set up biometrics
+            </LoadingButton>
+          ) : null}
+        </section>
+
+        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
               <h2 className="text-lg font-semibold text-white">Time in / out</h2>
               <p className="mt-2 text-sm text-slate-400">
-                {attendance.isClockedIn
-                  ? 'You are currently clocked in.'
-                  : 'You are currently clocked out.'}
+                {mustEnrollBiometrics
+                  ? 'Complete biometric setup above before clocking in or out.'
+                  : attendance.isClockedIn
+                    ? biometricStatus?.enrolled
+                      ? 'You are on duty. Clock out with biometrics when your shift ends.'
+                      : 'You are currently clocked in.'
+                    : biometricStatus?.enrolled
+                      ? 'Clock in with biometrics to start your shift.'
+                      : 'You are currently clocked out.'}
               </p>
             </div>
             <span
@@ -289,20 +394,22 @@ export default function EmployeePage() {
               type="button"
               loading={clockLoading && !attendance.isClockedIn}
               loadingText="Clocking in…"
-              disabled={clockLoading || attendance.isClockedIn}
+              disabled={clockLoading || attendance.isClockedIn || mustEnrollBiometrics}
               onClick={() => handleClock('in')}
               className="rounded-lg bg-emerald-500 px-5 py-2.5 font-medium text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50"
             >
+              <Fingerprint className="size-4" />
               Clock in
             </LoadingButton>
             <LoadingButton
               type="button"
               loading={clockLoading && attendance.isClockedIn}
               loadingText="Clocking out…"
-              disabled={clockLoading || !attendance.isClockedIn}
+              disabled={clockLoading || !attendance.isClockedIn || mustEnrollBiometrics}
               onClick={() => handleClock('out')}
               className="rounded-lg border border-slate-700 px-5 py-2.5 font-medium text-slate-200 transition hover:border-slate-500 hover:text-white disabled:opacity-50"
             >
+              <Fingerprint className="size-4" />
               Clock out
             </LoadingButton>
           </div>
@@ -315,9 +422,17 @@ export default function EmployeePage() {
                   key={event.id}
                   className="flex items-center justify-between rounded-lg bg-slate-950 px-3 py-2 text-sm"
                 >
-                  <span className="capitalize text-slate-300">
-                    {event.type.replace('_', ' ')}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="capitalize text-slate-300">
+                      {event.type.replace('_', ' ')}
+                    </span>
+                    {event.biometricVerified ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-300">
+                        <ShieldCheck className="size-3" />
+                        Biometric
+                      </span>
+                    ) : null}
+                  </div>
                   <span className="text-slate-500">
                     {formatAttendanceTime(event.recordedAt)}
                   </span>

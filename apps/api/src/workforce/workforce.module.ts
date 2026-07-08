@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AttendanceBiometricsService } from './attendance/attendance-biometrics.service';
 import { AttendanceController } from './attendance/attendance.controller';
 import { AttendanceService } from './attendance/attendance.service';
 import { DtrController } from './dtr/dtr.controller';
@@ -24,6 +25,7 @@ import { WorkforceContextService } from './workforce-context.service';
   ],
   providers: [
     WorkforceContextService,
+    AttendanceBiometricsService,
     AttendanceService,
     LeaveService,
     EmployeesService,

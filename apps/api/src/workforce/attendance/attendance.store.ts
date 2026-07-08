@@ -12,6 +12,9 @@ export interface AttendanceEvent {
   recordedAt: Date;
   latitude?: number;
   longitude?: number;
+  verificationMethod?: 'webauthn' | 'none';
+  biometricVerified?: boolean;
+  credentialId?: string;
   createdAt: Date;
 }
 
@@ -34,6 +37,9 @@ export async function createAttendanceEvent(input: {
   recordedAt?: Date;
   latitude?: number;
   longitude?: number;
+  verificationMethod?: 'webauthn' | 'none';
+  biometricVerified?: boolean;
+  credentialId?: string;
 }): Promise<AttendanceEvent> {
   const collection = await getCollection();
   const event: AttendanceEvent = {
@@ -45,6 +51,9 @@ export async function createAttendanceEvent(input: {
     recordedAt: input.recordedAt ?? new Date(),
     latitude: input.latitude,
     longitude: input.longitude,
+    verificationMethod: input.verificationMethod,
+    biometricVerified: input.biometricVerified,
+    credentialId: input.credentialId,
     createdAt: new Date(),
   };
 
