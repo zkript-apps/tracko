@@ -28,7 +28,9 @@ export async function getPostAuthPath(): Promise<
   '/onboarding' | '/dashboard' | '/employee' | '/platform'
 > {
   const sessionResult = await getSession();
-  const platformRole = sessionResult.data?.user?.platformRole;
+  const platformRole = (
+    sessionResult.data?.user as { platformRole?: string } | undefined
+  )?.platformRole;
 
   if (isSuperAdminRole(platformRole)) {
     return '/platform';

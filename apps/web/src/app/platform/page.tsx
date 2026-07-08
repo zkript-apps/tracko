@@ -5,7 +5,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
 import { LoadingButton } from '@/components/ui/loading-button';
-import { signOut, useSession } from '@/lib/auth-client';
+import { getSession, signOut, useSession } from '@/lib/auth-client';
 import { isSuperAdminRole } from '@/lib/org-roles';
 import {
   createPlatformAdminInvitation,
@@ -48,17 +48,29 @@ export default function PlatformPage() {
       return;
     }
 
-    if (!isSuperAdminRole(session.user.platformRole)) {
-      router.replace('/dashboard');
-      return;
-    }
+    void getSession()
+      .then((sessionResult) => {
+        const platformRole = (
+          sessionResult.data?.user as { platformRole?: string } | undefined
+        )?.platformRole;
 
-    void Promise.all([
-      getPlatformOverview(),
-      getPlatformOrganizations(),
-      getPlatformAdminInvitations(),
-    ])
-      .then(([nextOverview, nextOrganizations, nextInvitations]) => {
+        if (!isSuperAdminRole(platformRole)) {
+          router.replace('/dashboard');
+          return null;
+        }
+
+        return Promise.all([
+          getPlatformOverview(),
+          getPlatformOrganizations(),
+          getPlatformAdminInvitations(),
+        ]);
+      })
+      .then((result) => {
+        if (!result) {
+          return;
+        }
+
+        const [nextOverview, nextOrganizations, nextInvitations] = result;
         setOverview(nextOverview);
         setOrganizations(nextOrganizations);
         setInvitations(nextInvitations);

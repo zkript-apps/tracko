@@ -10,18 +10,22 @@ export const authClient = createAuthClient({
 export const { signIn, signUp, signOut, useSession, getSession, organization } =
   authClient;
 
+type EmailSignUpInput = Parameters<typeof signUp.email>[0];
+
 export async function signUpWithInvitation(input: {
   name: string;
   email: string;
   password: string;
   invitationToken: string;
 }) {
-  return signUp.email({
-    name: input.name,
-    email: input.email,
-    password: input.password,
-    invitationToken: input.invitationToken,
-  });
+  return signUp.email(
+    {
+      name: input.name,
+      email: input.email,
+      password: input.password,
+      invitationToken: input.invitationToken,
+    } as EmailSignUpInput & { invitationToken: string },
+  );
 }
 
 export async function signUpWithOrgInvitation(input: {
@@ -30,12 +34,14 @@ export async function signUpWithOrgInvitation(input: {
   password: string;
   orgInvitationId: string;
 }) {
-  return signUp.email({
-    name: input.name,
-    email: input.email,
-    password: input.password,
-    orgInvitationId: input.orgInvitationId,
-  });
+  return signUp.email(
+    {
+      name: input.name,
+      email: input.email,
+      password: input.password,
+      orgInvitationId: input.orgInvitationId,
+    } as EmailSignUpInput & { orgInvitationId: string },
+  );
 }
 
 export async function signUpSuperAdmin(input: {
@@ -44,10 +50,12 @@ export async function signUpSuperAdmin(input: {
   password: string;
   platformBootstrapSecret: string;
 }) {
-  return signUp.email({
-    name: input.name,
-    email: input.email,
-    password: input.password,
-    platformBootstrapSecret: input.platformBootstrapSecret,
-  });
+  return signUp.email(
+    {
+      name: input.name,
+      email: input.email,
+      password: input.password,
+      platformBootstrapSecret: input.platformBootstrapSecret,
+    } as EmailSignUpInput & { platformBootstrapSecret: string },
+  );
 }
