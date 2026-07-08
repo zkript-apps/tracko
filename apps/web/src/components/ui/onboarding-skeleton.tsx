@@ -5,7 +5,7 @@ export function OnboardingSkeleton() {
     <div
       aria-busy
       aria-label="Loading onboarding"
-      className="min-h-full bg-slate-950 px-4 py-12"
+      className="min-h-screen bg-background px-4 py-12"
     >
       <div className="mx-auto max-w-2xl">
         <div className="mb-8 space-y-3 text-center">

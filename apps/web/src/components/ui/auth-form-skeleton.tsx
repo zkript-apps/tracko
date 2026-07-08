@@ -2,7 +2,7 @@ import { Skeleton } from './skeleton';
 
 export function AuthFormSkeleton() {
   return (
-    <div className="flex min-h-full flex-1 items-center justify-center bg-slate-950 px-4 py-12">
+    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-12">
       <div
         aria-busy
         aria-label="Loading form"

@@ -69,6 +69,7 @@ Or run individually:
 ```bash
 npm run dev:api   # http://localhost:3001
 npm run dev:web   # http://localhost:3000
+npm run dev:all:lan
 ```
 
 ### 5. Try it out
@@ -91,6 +92,7 @@ Auth endpoints live at `http://localhost:3001/api/auth/*`.
 | Command | Description |
 | --- | --- |
 | `npm run dev` | Start API + web via Turborepo |
+| `npm run dev:all:lan` | Start API + LAN-accessible web together |
 | `npm run build` | Build all apps |
 | `npm run lint` | Lint all apps |
 

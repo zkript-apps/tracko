@@ -11,13 +11,19 @@ import {
   validateOrgInvitationForSignup,
 } from '../org-invitations/org-invitations.store';
 import { createBranchAssignment } from '../organizations/branch-assignments.store';
+import { createEmployeeProfile } from '../workforce/employees/employee-profiles.store';
+import { ensureBalancesForUser } from '../workforce/employees/leave-balances.store';
+import { todayDateString } from '../workforce/employees/leave-days.util';
 import { buildAcceptInviteUrl } from '../org-invitations/invite-url';
+import { sendOrgInvitationEmail } from '../email/email.client';
 import { getMongoClient, getMongoDb } from '../database/mongo';
 import {
   orgAc,
   orgInvitationSchema,
   orgRoles,
 } from './org-roles';
+
+const SUPER_ADMIN_ROLE = 'super_admin';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let authInstance: any = null;
@@ -62,6 +68,25 @@ export async function createAuth() {
       user: {
         create: {
           before: async (user, ctx) => {
+            const bootstrapSecret =
+              typeof ctx?.body?.platformBootstrapSecret === 'string'
+                ? ctx.body.platformBootstrapSecret
+                : undefined;
+            const expectedBootstrap = process.env.PLATFORM_BOOTSTRAP_SECRET;
+
+            if (
+              bootstrapSecret &&
+              expectedBootstrap &&
+              bootstrapSecret === expectedBootstrap
+            ) {
+              return {
+                data: {
+                  ...user,
+                  platformRole: SUPER_ADMIN_ROLE,
+                },
+              };
+            }
+
             const orgInvitationId =
               typeof ctx?.body?.orgInvitationId === 'string'
                 ? ctx.body.orgInvitationId
@@ -100,8 +125,21 @@ export async function createAuth() {
           typeof ctx.body?.orgInvitationId === 'string'
             ? ctx.body.orgInvitationId
             : undefined;
+        const bootstrapSecret =
+          typeof ctx.body?.platformBootstrapSecret === 'string'
+            ? ctx.body.platformBootstrapSecret
+            : undefined;
+        const expectedBootstrap = process.env.PLATFORM_BOOTSTRAP_SECRET;
         const email =
           typeof ctx.body?.email === 'string' ? ctx.body.email : undefined;
+
+        if (
+          bootstrapSecret &&
+          expectedBootstrap &&
+          bootstrapSecret === expectedBootstrap
+        ) {
+          return;
+        }
 
         if (adminToken) {
           try {
@@ -174,9 +212,15 @@ export async function createAuth() {
         organizationLimit: 1,
         sendInvitationEmail: async (data) => {
           const inviteUrl = buildAcceptInviteUrl(data.id, webUrl);
-          console.log(
-            `[Tracko] Organization invite for ${data.email} (${data.role}): ${inviteUrl}`,
-          );
+          await sendOrgInvitationEmail({
+            email: data.email,
+            role: data.role,
+            inviteUrl,
+            organizationName:
+              typeof data.organization?.name === 'string'
+                ? data.organization.name
+                : undefined,
+          });
         },
         organizationHooks: {
           afterAcceptInvitation: async ({ invitation, member, user }) => {
@@ -196,6 +240,27 @@ export async function createAuth() {
               branchId,
               role: member.role,
             });
+
+            if (member.role === 'employee') {
+              const today = todayDateString();
+              await createEmployeeProfile({
+                organizationId: String(invitation.organizationId),
+                userId: user.id,
+                memberId: member.id,
+                branchId,
+                employmentType: 'probation',
+                hireDate: today,
+                contractStartDate: today,
+              });
+
+              await ensureBalancesForUser({
+                organizationId: String(invitation.organizationId),
+                userId: user.id,
+                memberId: member.id,
+                branchId,
+                periodYear: new Date().getFullYear(),
+              });
+            }
           },
         },
         schema: {

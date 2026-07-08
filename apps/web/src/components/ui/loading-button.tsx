@@ -1,11 +1,13 @@
-import { ButtonHTMLAttributes } from 'react';
-import { cn } from '@/lib/cn';
+import { type ComponentProps } from 'react';
+import { type VariantProps } from 'class-variance-authority';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Spinner } from './spinner';
 
-type LoadingButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  loading?: boolean;
-  loadingText?: string;
-};
+type LoadingButtonProps = ComponentProps<'button'> &
+  VariantProps<typeof buttonVariants> & {
+    loading?: boolean;
+    loadingText?: string;
+  };
 
 export function LoadingButton({
   loading = false,
@@ -13,16 +15,17 @@ export function LoadingButton({
   children,
   className,
   disabled,
+  variant,
+  size,
   ...props
 }: LoadingButtonProps) {
   return (
-    <button
+    <Button
       {...props}
+      variant={variant}
+      size={size}
       disabled={disabled || loading}
-      className={cn(
-        'inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60',
-        className,
-      )}
+      className={className}
     >
       {loading ? (
         <>
@@ -32,6 +35,6 @@ export function LoadingButton({
       ) : (
         children
       )}
-    </button>
+    </Button>
   );
 }

@@ -1,16 +1,32 @@
 import { Injectable } from '@nestjs/common';
 import {
+  buildAdminSignupUrl,
   createAdminInvitation,
   findInvitationByToken,
   toPublicInvitation,
   validateAdminInvitation,
 } from './admin-invitations.store';
 import type { CreateAdminInvitationInput } from './admin-invitation.types';
+import { sendAdminInvitationEmail } from '../email/email.client';
 
 @Injectable()
 export class AdminInvitationsService {
+  async createAndDeliver(input: CreateAdminInvitationInput) {
+    const invitation = await createAdminInvitation(input);
+    const webUrl = process.env.WEB_URL ?? 'http://localhost:3000';
+    const signupUrl = buildAdminSignupUrl(invitation.token, webUrl);
+
+    await sendAdminInvitationEmail({
+      email: invitation.email,
+      planTier: invitation.planTier,
+      signupUrl,
+    });
+
+    return { invitation, signupUrl };
+  }
+
   createFromPayment(input: CreateAdminInvitationInput) {
-    return createAdminInvitation(input);
+    return this.createAndDeliver(input);
   }
 
   async validateToken(token: string) {

@@ -53,17 +53,15 @@ export class AdminInvitationsController {
       throw new BadRequestException('Invalid plan tier.');
     }
 
-    const invitation = await this.invitations.createFromPayment({
+    const { invitation, signupUrl } = await this.invitations.createFromPayment({
       email: body.email,
       planTier: body.planTier,
       paymentReference: body.paymentReference,
     });
 
-    const webUrl = process.env.WEB_URL ?? 'http://localhost:3000';
-
     return {
       invitationToken: invitation.token,
-      signupUrl: `${webUrl}/sign-up?token=${invitation.token}`,
+      signupUrl,
       email: invitation.email,
       planTier: invitation.planTier,
       expiresAt: invitation.expiresAt.toISOString(),

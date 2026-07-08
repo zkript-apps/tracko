@@ -18,14 +18,14 @@ const tiers = [
 
 export default function HomePage() {
   return (
-    <div className="min-h-full bg-slate-950 text-slate-100">
+    <div className="min-h-screen bg-background text-slate-100">
       <header className="border-b border-slate-800">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
           <div>
             <p className="text-xs uppercase tracking-[0.25em] text-emerald-400">
               Tracko
             </p>
-            <p className="text-sm text-slate-400">WorkTrack SaaS Platform</p>
+            <p className="text-sm text-slate-400">Tracko SaaS Platform</p>
           </div>
           <div className="flex items-center gap-3">
             <Link
@@ -54,7 +54,7 @@ export default function HomePage() {
               Digital time tracking, DTR, leave, and payroll — without building from scratch.
             </h1>
             <p className="text-lg leading-8 text-slate-300">
-              WorkTrack gives Philippine SMBs an affordable subscription platform for
+              Tracko gives Philippine SMBs an affordable subscription platform for
               attendance, field monitoring, leave management, and payroll. Each company
               gets a private, isolated environment — like Microsoft 365, but built for
               workforce operations.

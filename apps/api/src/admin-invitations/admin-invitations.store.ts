@@ -135,6 +135,15 @@ async function markInvitationStatus(
   await collection.updateOne({ token }, { $set: { status } });
 }
 
+export async function listAdminInvitations(): Promise<AdminInvitation[]> {
+  const collection = await getCollection();
+  return collection.find({}).sort({ createdAt: -1 }).toArray();
+}
+
+export function buildAdminSignupUrl(token: string, webUrl: string): string {
+  return `${webUrl}/sign-up?token=${encodeURIComponent(token)}`;
+}
+
 export function toPublicInvitation(invitation: AdminInvitation) {
   return {
     email: invitation.email,

@@ -1,7 +1,7 @@
 import { apiFetch } from './api';
 import { getSession } from './auth-client';
 import { getTeamOverview } from './team';
-import { getPostInvitePath, isEmployeeRole, isOrgAdminRole } from './org-roles';
+import { getPostInvitePath, isEmployeeRole, isOrgAdminRole, isSuperAdminRole } from './org-roles';
 
 export type OnboardingStatus = {
   needsOnboarding: boolean;
@@ -25,10 +25,16 @@ export async function getOnboardingStatus(): Promise<OnboardingStatus> {
 }
 
 export async function getPostAuthPath(): Promise<
-  '/onboarding' | '/dashboard' | '/employee'
+  '/onboarding' | '/dashboard' | '/employee' | '/platform'
 > {
   const sessionResult = await getSession();
-  const platformRole = sessionResult.data?.user?.platformRole;
+  const platformRole = (
+    sessionResult.data?.user as { platformRole?: string } | undefined
+  )?.platformRole;
+
+  if (isSuperAdminRole(platformRole)) {
+    return '/platform';
+  }
 
   if (isEmployeeRole(platformRole)) {
     return '/employee';

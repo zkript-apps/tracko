@@ -1,64 +1,78 @@
 'use client';
 
-import Link from 'next/link';
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
+import { toast } from 'sonner';
 import { LoadingButton } from '@/components/ui/loading-button';
-import { signOut, useSession } from '@/lib/auth-client';
-import { getOnboardingStatus } from '@/lib/onboarding';
-import { formatOrgRole } from '@/lib/org-roles';
+import { Button } from '@/components/ui/button';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useSession } from '@/lib/auth-client';
+import {
+  formatOrgRole,
+  isEmployeeRole,
+  isHrRole,
+  isOrgAdminRole,
+} from '@/lib/org-roles';
 import { getTeamOverview, inviteHrMember, cancelOrgInvitation, type TeamOverview } from '@/lib/team';
 import { buildAcceptInviteUrl } from '@/lib/invite-url';
 
+function getHeadOfficeBranchId(team: TeamOverview): string {
+  return (
+    team.branches.find((branch) => branch.isHeadOffice)?._id ??
+    team.branches[0]?._id ??
+    ''
+  );
+}
+
+function formatBranchName(branch: TeamOverview['branches'][number]): string {
+  return `${branch.name}${branch.isHeadOffice ? ' (Head office)' : ''}${
+    branch.city ? ` — ${branch.city}` : ''
+  }`;
+}
+
 export default function TeamPage() {
   const router = useRouter();
-  const { data: session, isPending } = useSession();
+  const { data: session } = useSession();
   const [team, setTeam] = useState<TeamOverview | null>(null);
   const [email, setEmail] = useState('');
   const [branchId, setBranchId] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [memberBranchFilter, setMemberBranchFilter] = useState('');
+  const [membersSheetOpen, setMembersSheetOpen] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isPending) {
-      return;
-    }
-
     if (!session) {
-      router.replace('/sign-in');
       return;
     }
 
-    void getOnboardingStatus().then((status) => {
-      if (status.needsOnboarding) {
-        router.replace('/onboarding');
-        return;
-      }
+    void getTeamOverview()
+      .then((overview) => {
+        if (!overview.currentMember?.canManageTeam) {
+          router.replace('/dashboard');
+          return;
+        }
 
-      void getTeamOverview()
-        .then((overview) => {
-          if (!overview.currentMember?.canManageTeam) {
-            router.replace('/dashboard');
-            return;
-          }
-
-          setTeam(overview);
-          if (overview.branches[0]) {
-            setBranchId(overview.branches[0]._id);
-          }
-        })
-        .catch(() => router.replace('/dashboard'));
-    });
-  }, [isPending, router, session]);
+        setTeam(overview);
+        const defaultBranchId = getHeadOfficeBranchId(overview);
+        if (defaultBranchId) {
+          setBranchId(defaultBranchId);
+          setMemberBranchFilter(defaultBranchId);
+        }
+      })
+      .catch(() => router.replace('/dashboard'));
+  }, [router, session]);
 
   async function handleInvite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
-    setSuccess(null);
     setInviteUrl(null);
     setLoading(true);
 
@@ -69,9 +83,9 @@ export default function TeamPage() {
       setTeam(overview);
       setEmail('');
       setInviteUrl(result.inviteUrl);
-      setSuccess(`Invitation sent to ${invitedEmail}.`);
+      toast.success(`Invitation sent to ${invitedEmail}.`);
     } catch (inviteError) {
-      setError(
+      toast.error(
         inviteError instanceof Error
           ? inviteError.message
           : 'Unable to send invitation.',
@@ -82,18 +96,16 @@ export default function TeamPage() {
   }
 
   async function handleCancelInvitation(invitationId: string) {
-    setError(null);
-    setSuccess(null);
     setCancellingId(invitationId);
 
     try {
       await cancelOrgInvitation(invitationId);
       const overview = await getTeamOverview();
       setTeam(overview);
-      setSuccess('Invitation cancelled.');
       setInviteUrl(null);
+      toast.success('Invitation cancelled.');
     } catch (cancelError) {
-      setError(
+      toast.error(
         cancelError instanceof Error
           ? cancelError.message
           : 'Unable to cancel invitation.',
@@ -103,65 +115,82 @@ export default function TeamPage() {
     }
   }
 
-  async function handleSignOut() {
-    await signOut();
-    router.push('/sign-in');
-    router.refresh();
+  const orgAdmins = useMemo(() => {
+    if (!team) {
+      return [];
+    }
+
+    return team.members.filter((member) => isOrgAdminRole(member.role));
+  }, [team]);
+
+  const branchMembers = useMemo(() => {
+    if (!team || !memberBranchFilter) {
+      return [];
+    }
+
+    return team.members.filter(
+      (member) =>
+        !isOrgAdminRole(member.role) &&
+        member.branch?.id === memberBranchFilter,
+    );
+  }, [memberBranchFilter, team]);
+
+  const branchHrMembers = useMemo(
+    () => branchMembers.filter((member) => isHrRole(member.role)),
+    [branchMembers],
+  );
+
+  const branchEmployeeMembers = useMemo(
+    () => branchMembers.filter((member) => isEmployeeRole(member.role)),
+    [branchMembers],
+  );
+
+  const filteredInvitations = useMemo(() => {
+    if (!team || !memberBranchFilter) {
+      return [];
+    }
+
+    return team.invitations.filter(
+      (invitation) => invitation.branch?.id === memberBranchFilter,
+    );
+  }, [memberBranchFilter, team]);
+
+  const selectedBranch = useMemo(
+    () => team?.branches.find((branch) => branch._id === memberBranchFilter) ?? null,
+    [memberBranchFilter, team],
+  );
+
+  function handleBranchFilterChange(nextBranchId: string) {
+    setMemberBranchFilter(nextBranchId);
+    setMembersSheetOpen(false);
   }
 
-  if (isPending || !team) {
-    return <DashboardSkeleton />;
+  if (!team) {
+    return (
+      <div className="space-y-6 px-6 py-8">
+        <Skeleton className="h-8 w-40" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-full bg-slate-950 text-slate-100">
-      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.25em] text-emerald-400">
-              {team.organization.name}
-            </p>
-            <h1 className="text-lg font-semibold">Team & HR</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/dashboard"
-              className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
-            >
-              Dashboard
-            </Link>
-            <button
-              onClick={handleSignOut}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
-            >
-              Sign out
-            </button>
-          </div>
+    <div className="space-y-8 px-6 py-8">
+      <div>
+        <h1 className="text-2xl font-semibold text-foreground">Team & HR</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Invite HR managers and review your organization roster.
+        </p>
+      </div>
+
+      {inviteUrl ? (
+        <div className="space-y-2 rounded-lg border border-primary/20 bg-primary/10 px-3 py-3 text-sm text-primary">
+          <p>Share this invite link (valid until they accept):</p>
+          <code className="block overflow-x-auto rounded-lg bg-background px-3 py-2 text-xs">
+            {inviteUrl}
+          </code>
         </div>
-      </header>
-
-      <main className="mx-auto max-w-6xl space-y-8 px-6 py-10">
-        {error ? (
-          <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">
-            {error}
-          </p>
-        ) : null}
-
-        {success ? (
-          <div className="space-y-3 rounded-lg bg-emerald-500/10 px-3 py-3 text-sm text-emerald-300">
-            <p>{success}</p>
-            {inviteUrl ? (
-              <div className="space-y-2">
-                <p className="text-slate-400">
-                  Share this link with the invitee (valid until they accept):
-                </p>
-                <code className="block overflow-x-auto rounded-lg bg-slate-950 px-3 py-2 text-xs text-emerald-200">
-                  {inviteUrl}
-                </code>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
+      ) : null}
 
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
           <h2 className="text-lg font-semibold text-white">Invite HR manager</h2>
@@ -196,6 +225,7 @@ export default function TeamPage() {
                 {team.branches.map((branch) => (
                   <option key={branch._id} value={branch._id}>
                     {branch.name}
+                    {branch.isHeadOffice ? ' (Head office)' : ''}
                     {branch.city ? ` — ${branch.city}` : ''}
                   </option>
                 ))}
@@ -216,32 +246,111 @@ export default function TeamPage() {
         </section>
 
         <section className="grid gap-8 lg:grid-cols-2">
-          <div>
-            <h2 className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-slate-400">
-              Team members
-            </h2>
-            <div className="space-y-3">
-              {team.members.map((member) => (
-                <article
-                  key={member.id}
-                  className="rounded-xl border border-slate-800 bg-slate-900 p-4"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-white">{member.user.name}</p>
-                      <p className="text-sm text-slate-400">{member.user.email}</p>
-                    </div>
-                    <span className="rounded-full bg-slate-800 px-2.5 py-1 text-xs text-emerald-300">
-                      {formatOrgRole(member.role)}
-                    </span>
-                  </div>
-                  {member.branch ? (
-                    <p className="mt-2 text-sm text-slate-500">
-                      Branch: {member.branch.name}
-                    </p>
-                  ) : null}
+          <div className="space-y-6">
+            {orgAdmins.length > 0 ? (
+              <div>
+                <h2 className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-slate-400">
+                  Organization admins
+                </h2>
+                <div className="space-y-3">
+                  {orgAdmins.map((member) => (
+                    <article
+                      key={member.id}
+                      className="rounded-xl border border-slate-800 bg-slate-900 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-white">
+                            {member.user.name}
+                          </p>
+                          <p className="text-sm text-slate-400">
+                            {member.user.email}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-slate-800 px-2.5 py-1 text-xs text-emerald-300">
+                          {formatOrgRole(member.role)}
+                        </span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div>
+              <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
+                <h2 className="text-sm font-medium uppercase tracking-[0.2em] text-slate-400">
+                  Team members
+                </h2>
+                <label className="block min-w-[16rem] flex-1 space-y-2 sm:max-w-md">
+                  <span className="text-xs text-slate-500">Branch</span>
+                  <select
+                    value={memberBranchFilter}
+                    onChange={(event) =>
+                      handleBranchFilterChange(event.target.value)
+                    }
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none ring-emerald-500 focus:ring-2"
+                  >
+                    {team.branches.map((branch) => (
+                      <option key={branch._id} value={branch._id}>
+                        {formatBranchName(branch)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="space-y-3">
+                {branchHrMembers.length === 0 ? (
+                  <p className="rounded-xl border border-dashed border-slate-800 p-4 text-sm text-slate-500">
+                    No HR assigned to this branch.
+                  </p>
+                ) : (
+                  branchHrMembers.map((member) => (
+                    <article
+                      key={member.id}
+                      className="rounded-xl border border-slate-800 bg-slate-900 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-white">
+                            {member.user.name}
+                          </p>
+                          <p className="text-sm text-slate-400">
+                            {member.user.email}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-sky-500/15 px-2.5 py-1 text-xs text-sky-300">
+                          {formatOrgRole(member.role)}
+                        </span>
+                      </div>
+                    </article>
+                  ))
+                )}
+
+                <article className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+                  <p className="text-sm text-slate-400">Employees</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">
+                    {branchEmployeeMembers.length}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {branchEmployeeMembers.length === 1
+                      ? 'employee in this branch'
+                      : 'employees in this branch'}
+                  </p>
                 </article>
-              ))}
+
+                {branchMembers.length > 0 ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => setMembersSheetOpen(true)}
+                  >
+                    View all members
+                  </Button>
+                ) : null}
+              </div>
             </div>
           </div>
 
@@ -250,12 +359,12 @@ export default function TeamPage() {
               Pending invitations
             </h2>
             <div className="space-y-3">
-              {team.invitations.length === 0 ? (
+              {filteredInvitations.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-slate-800 p-4 text-sm text-slate-500">
-                  No pending invitations.
+                  No pending invitations for this branch.
                 </p>
               ) : (
-                team.invitations.map((invitation) => (
+                filteredInvitations.map((invitation) => (
                   <article
                     key={invitation.id}
                     className="rounded-xl border border-slate-800 bg-slate-900 p-4"
@@ -270,11 +379,13 @@ export default function TeamPage() {
                       </div>
                       <LoadingButton
                         type="button"
+                        variant="destructive"
+                        size="xs"
                         loading={cancellingId === invitation.id}
                         loadingText="Cancelling…"
                         onClick={() => handleCancelInvitation(invitation.id)}
                         disabled={cancellingId !== null && cancellingId !== invitation.id}
-                        className="shrink-0 rounded-lg border border-red-500/30 px-3 py-1.5 text-xs text-red-300 transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-200 disabled:opacity-50"
+                        className="shrink-0"
                       >
                         Cancel
                       </LoadingButton>
@@ -288,7 +399,60 @@ export default function TeamPage() {
             </div>
           </div>
         </section>
-      </main>
+
+      <Sheet open={membersSheetOpen} onOpenChange={setMembersSheetOpen}>
+        <SheetContent
+          className="gap-0 overflow-x-hidden overflow-y-auto p-0 sm:max-w-none"
+          style={{ width: 'min(960px, 92vw)', maxWidth: '92vw' }}
+        >
+          <SheetHeader className="border-b border-border px-6 pb-4 pt-4">
+            <SheetTitle>
+              {selectedBranch ? selectedBranch.name : 'Branch members'}
+            </SheetTitle>
+            <SheetDescription>
+              {branchMembers.length} member
+              {branchMembers.length === 1 ? '' : 's'} ·{' '}
+              {branchHrMembers.length} HR · {branchEmployeeMembers.length}{' '}
+              employee{branchEmployeeMembers.length === 1 ? '' : 's'}
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="space-y-3 px-6 pt-6 pb-6">
+            {branchMembers.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                No members assigned to this branch.
+              </p>
+            ) : (
+              branchMembers.map((member) => (
+                <article
+                  key={member.id}
+                  className="rounded-xl border border-border bg-card p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium text-foreground">
+                        {member.user.name}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {member.user.email}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-1 text-xs ${
+                        isHrRole(member.role)
+                          ? 'bg-sky-500/15 text-sky-400'
+                          : 'bg-primary/15 text-primary'
+                      }`}
+                    >
+                      {formatOrgRole(member.role)}
+                    </span>
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

@@ -28,4 +28,31 @@ export async function apiFetch<T>(
   return response.json() as Promise<T>;
 }
 
+export async function apiUpload<T>(
+  path: string,
+  formData: FormData,
+  init?: Omit<RequestInit, 'body'>,
+): Promise<T> {
+  const response = await fetch(`${apiUrl}${path}`, {
+    ...init,
+    method: init?.method ?? 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as {
+      message?: string | string[];
+    } | null;
+    const message = payload?.message;
+    throw new Error(
+      Array.isArray(message)
+        ? message.join(', ')
+        : message ?? 'Upload failed.',
+    );
+  }
+
+  return response.json() as Promise<T>;
+}
+
 export { apiUrl };
