@@ -39,6 +39,24 @@ import {
   listLeaveRequestsForUser,
   type LeaveRequest as LeaveRequestRecord,
 } from '../leave/leave.store';
+import {
+  createEmployeeDocument,
+  deleteEmployeeDocument,
+  DOCUMENT_CATEGORIES,
+  findEmployeeDocument,
+  listEmployeeDocuments as listStoredEmployeeDocuments,
+  serializeEmployeeDocument,
+  setEmployeeDocumentStoredFileName,
+  type DocumentCategory,
+} from './employee-documents.store';
+import {
+  createStoredFileName,
+  deleteEmployeeDocumentFile,
+  getEmployeeDocumentExtension,
+  MAX_EMPLOYEE_DOCUMENT_BYTES,
+  openEmployeeDocumentFile,
+  saveEmployeeDocumentFile,
+} from './employee-document-files.util';
 
 function serializeLeaveHistoryItem(request: LeaveRequestRecord) {
   return {
@@ -486,5 +504,223 @@ export class EmployeesService {
       periodYear: year,
       leaveBalances: balances.map(serializeLeaveBalance),
     };
+  }
+
+  async listEmployeeDocuments(request: Request, userId: string) {
+    const context = await this.requireManager(request);
+    const assignment = await findAssignmentByUserId(
+      context.organizationId,
+      userId,
+    );
+
+    if (!assignment || assignment.role !== 'employee') {
+      throw new NotFoundException('Employee not found.');
+    }
+
+    this.assertEmployeeAccess(context, assignment.branchId);
+
+    const documents = await listStoredEmployeeDocuments(
+      context.organizationId,
+      userId,
+    );
+
+    return {
+      documents: documents.map(serializeEmployeeDocument),
+    };
+  }
+
+  async createEmployeeDocument(
+    request: Request,
+    userId: string,
+    input: {
+      title: string;
+      category: DocumentCategory;
+      notes?: string;
+      referenceUrl?: string;
+      file?: Express.Multer.File;
+    },
+  ) {
+    const context = await this.requireManager(request);
+    const assignment = await findAssignmentByUserId(
+      context.organizationId,
+      userId,
+    );
+
+    if (!assignment || assignment.role !== 'employee') {
+      throw new NotFoundException('Employee not found.');
+    }
+
+    this.assertEmployeeAccess(context, assignment.branchId);
+
+    const title = input.title?.trim();
+    if (!title) {
+      throw new BadRequestException('Document title is required.');
+    }
+
+    if (!DOCUMENT_CATEGORIES.includes(input.category)) {
+      throw new BadRequestException('Invalid document category.');
+    }
+
+    const referenceUrl = input.referenceUrl?.trim() || undefined;
+    const file = input.file;
+
+    if (!file && !referenceUrl) {
+      throw new BadRequestException(
+        'Upload a file or provide a reference URL.',
+      );
+    }
+
+    let fileName: string | undefined;
+    let fileMimeType: string | undefined;
+    let fileSize: number | undefined;
+    let storedFileName: string | undefined;
+
+    if (file) {
+      if (file.size > MAX_EMPLOYEE_DOCUMENT_BYTES) {
+        throw new BadRequestException('File must be 10 MB or smaller.');
+      }
+
+      const extension = getEmployeeDocumentExtension(file.originalname);
+      if (!extension) {
+        throw new BadRequestException(
+          'Unsupported file type. Allowed: PDF, PNG, JPG, WEBP, DOC, DOCX.',
+        );
+      }
+
+      fileName = file.originalname;
+      fileMimeType = file.mimetype || 'application/octet-stream';
+      fileSize = file.size;
+    }
+
+    const document = await createEmployeeDocument({
+      organizationId: context.organizationId,
+      userId,
+      title,
+      category: input.category,
+      notes: input.notes,
+      referenceUrl,
+      fileName,
+      fileMimeType,
+      fileSize,
+      createdBy: context.userId,
+    });
+
+    if (file) {
+      const extension = getEmployeeDocumentExtension(file.originalname)!;
+      storedFileName = createStoredFileName(document._id, extension);
+
+      try {
+        await saveEmployeeDocumentFile({
+          organizationId: context.organizationId,
+          userId,
+          storedFileName,
+          buffer: file.buffer,
+        });
+      } catch {
+        await deleteEmployeeDocument({
+          organizationId: context.organizationId,
+          userId,
+          documentId: document._id,
+        });
+        throw new BadRequestException('Unable to save uploaded file.');
+      }
+
+      await setEmployeeDocumentStoredFileName({
+        organizationId: context.organizationId,
+        userId,
+        documentId: document._id,
+        storedFileName,
+      });
+
+      document.storedFileName = storedFileName;
+    }
+
+    return serializeEmployeeDocument(document);
+  }
+
+  async getEmployeeDocumentFile(
+    request: Request,
+    userId: string,
+    documentId: string,
+  ) {
+    const context = await this.requireManager(request);
+    const assignment = await findAssignmentByUserId(
+      context.organizationId,
+      userId,
+    );
+
+    if (!assignment || assignment.role !== 'employee') {
+      throw new NotFoundException('Employee not found.');
+    }
+
+    this.assertEmployeeAccess(context, assignment.branchId);
+
+    const document = await findEmployeeDocument({
+      organizationId: context.organizationId,
+      userId,
+      documentId,
+    });
+
+    if (!document?.storedFileName) {
+      throw new NotFoundException('Document file not found.');
+    }
+
+    return {
+      stream: openEmployeeDocumentFile({
+        organizationId: context.organizationId,
+        userId,
+        storedFileName: document.storedFileName,
+      }),
+      fileName: document.fileName ?? document.title,
+      mimeType: document.fileMimeType ?? 'application/octet-stream',
+    };
+  }
+
+  async deleteEmployeeDocument(
+    request: Request,
+    userId: string,
+    documentId: string,
+  ) {
+    const context = await this.requireManager(request);
+    const assignment = await findAssignmentByUserId(
+      context.organizationId,
+      userId,
+    );
+
+    if (!assignment || assignment.role !== 'employee') {
+      throw new NotFoundException('Employee not found.');
+    }
+
+    this.assertEmployeeAccess(context, assignment.branchId);
+
+    const document = await findEmployeeDocument({
+      organizationId: context.organizationId,
+      userId,
+      documentId,
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document not found.');
+    }
+
+    if (document.storedFileName) {
+      await deleteEmployeeDocumentFile({
+        organizationId: context.organizationId,
+        userId,
+        storedFileName: document.storedFileName,
+      });
+    }
+
+    const deleted = await deleteEmployeeDocument({
+      organizationId: context.organizationId,
+      userId,
+      documentId,
+    });
+
+    if (!deleted) {
+      throw new NotFoundException('Document not found.');
+    }
+
+    return { success: true };
   }
 }

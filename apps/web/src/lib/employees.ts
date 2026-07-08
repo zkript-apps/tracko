@@ -1,4 +1,4 @@
-import { apiFetch } from './api';
+import { apiFetch, apiUpload, apiUrl } from './api';
 import type { LeaveRequest } from './leave';
 
 export const EMPLOYMENT_TYPES = [
@@ -80,6 +80,31 @@ export type EmployeeDetail = EmployeeRecord & {
   leaveHistory: LeaveRequest[];
 };
 
+export const DOCUMENT_CATEGORIES = [
+  { value: 'contract', label: 'Contract' },
+  { value: 'government_id', label: 'Government ID' },
+  { value: 'clearance', label: 'Clearance' },
+  { value: 'certificate', label: 'Certificate' },
+  { value: 'other', label: 'Other' },
+] as const;
+
+export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number]['value'];
+
+export type EmployeeDocument = {
+  id: string;
+  userId: string;
+  title: string;
+  category: DocumentCategory;
+  notes: string | null;
+  referenceUrl: string | null;
+  fileName: string | null;
+  fileMimeType: string | null;
+  fileSize: number | null;
+  hasFile: boolean;
+  createdBy: string;
+  createdAt: string;
+};
+
 export async function listEmployeeRecords(
   periodYear?: number,
 ): Promise<{ periodYear: number; employees: EmployeeRecord[] }> {
@@ -153,6 +178,105 @@ export async function updateEmployeeCompensation(
     method: 'PATCH',
     body: JSON.stringify(input),
   });
+}
+
+export async function listEmployeeDocuments(
+  userId: string,
+): Promise<{ documents: EmployeeDocument[] }> {
+  return apiFetch(`/employees/${encodeURIComponent(userId)}/documents`);
+}
+
+export async function createEmployeeDocument(
+  userId: string,
+  input: {
+    title: string;
+    category: DocumentCategory;
+    notes?: string;
+    referenceUrl?: string;
+    file?: File | null;
+  },
+): Promise<EmployeeDocument> {
+  const formData = new FormData();
+  formData.append('title', input.title);
+  formData.append('category', input.category);
+
+  if (input.notes?.trim()) {
+    formData.append('notes', input.notes.trim());
+  }
+
+  if (input.referenceUrl?.trim()) {
+    formData.append('referenceUrl', input.referenceUrl.trim());
+  }
+
+  if (input.file) {
+    formData.append('file', input.file);
+  }
+
+  return apiUpload(`/employees/${encodeURIComponent(userId)}/documents`, formData);
+}
+
+export async function downloadEmployeeDocumentFile(
+  userId: string,
+  documentId: string,
+  fileName: string,
+): Promise<void> {
+  const response = await fetch(
+    `${apiUrl}/employees/${encodeURIComponent(userId)}/documents/${encodeURIComponent(documentId)}/file`,
+    { credentials: 'include' },
+  );
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as {
+      message?: string | string[];
+    } | null;
+    const message = payload?.message;
+    throw new Error(
+      Array.isArray(message)
+        ? message.join(', ')
+        : message ?? 'Unable to download file.',
+    );
+  }
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(objectUrl);
+}
+
+export function formatFileSize(bytes: number | null): string {
+  if (!bytes) {
+    return '';
+  }
+
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export async function deleteEmployeeDocument(
+  userId: string,
+  documentId: string,
+): Promise<{ success: boolean }> {
+  return apiFetch(
+    `/employees/${encodeURIComponent(userId)}/documents/${encodeURIComponent(documentId)}`,
+    { method: 'DELETE' },
+  );
+}
+
+export function formatDocumentCategory(category: string): string {
+  return (
+    DOCUMENT_CATEGORIES.find((item) => item.value === category)?.label ??
+    category
+  );
 }
 
 export function formatWorkSchedule(schedule: WorkSchedule): string {

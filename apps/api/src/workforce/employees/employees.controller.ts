@@ -2,14 +2,21 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
+  Post,
   Put,
   Query,
   Req,
+  StreamableFile,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
+import { memoryStorage } from 'multer';
 import {
   BALANCE_LEAVE_TYPES,
   type BalanceLeaveType,
@@ -20,6 +27,8 @@ import {
   type EmploymentType,
   type PayRateType,
 } from './employee-profiles.store';
+import { DOCUMENT_CATEGORIES, type DocumentCategory } from './employee-documents.store';
+import { MAX_EMPLOYEE_DOCUMENT_BYTES } from './employee-document-files.util';
 import { EmployeesService } from './employees.service';
 
 class UpdateProfileDto {
@@ -54,6 +63,13 @@ class UpdateCompensationDto {
   payRateAmount!: number | null;
 }
 
+class CreateDocumentDto {
+  title!: string;
+  category!: DocumentCategory;
+  notes?: string;
+  referenceUrl?: string;
+}
+
 @Controller('employees')
 export class EmployeesController {
   constructor(private readonly employees: EmployeesService) {}
@@ -70,6 +86,68 @@ export class EmployeesController {
     }
 
     return this.employees.listEmployees(request, year);
+  }
+
+  @Get(':userId/documents')
+  listDocuments(@Req() request: Request, @Param('userId') userId: string) {
+    return this.employees.listEmployeeDocuments(request, userId);
+  }
+
+  @Post(':userId/documents')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: MAX_EMPLOYEE_DOCUMENT_BYTES },
+    }),
+  )
+  createDocument(
+    @Req() request: Request,
+    @Param('userId') userId: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body() body: CreateDocumentDto,
+  ) {
+    if (!body.title?.trim()) {
+      throw new BadRequestException('Document title is required.');
+    }
+
+    if (!DOCUMENT_CATEGORIES.includes(body.category)) {
+      throw new BadRequestException('Invalid document category.');
+    }
+
+    return this.employees.createEmployeeDocument(request, userId, {
+      title: body.title,
+      category: body.category,
+      notes: body.notes,
+      referenceUrl: body.referenceUrl,
+      file,
+    });
+  }
+
+  @Get(':userId/documents/:documentId/file')
+  async downloadDocumentFile(
+    @Req() request: Request,
+    @Param('userId') userId: string,
+    @Param('documentId') documentId: string,
+  ) {
+    const file = await this.employees.getEmployeeDocumentFile(
+      request,
+      userId,
+      documentId,
+    );
+
+    return new StreamableFile(file.stream, {
+      type: file.mimeType,
+      disposition: `attachment; filename="${encodeURIComponent(file.fileName)}"`,
+    });
+  }
+
+  @Delete(':userId/documents/:documentId')
+  deleteDocument(
+    @Req() request: Request,
+    @Param('userId') userId: string,
+    @Param('documentId') documentId: string,
+  ) {
+    return this.employees.deleteEmployeeDocument(request, userId, documentId);
   }
 
   @Get(':userId')

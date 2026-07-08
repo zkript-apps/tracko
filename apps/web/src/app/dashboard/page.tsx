@@ -16,10 +16,6 @@ const modules = [
     title: 'Live Location',
     description: 'Monitor field teams and geofence alerts in real time.',
   },
-  {
-    title: 'Employee Records',
-    description: 'Profiles, documents, and linked attendance history.',
-  },
 ] as const;
 
 export default function DashboardPage() {
@@ -114,6 +110,12 @@ export default function DashboardPage() {
                 className="inline-flex rounded-lg border border-primary/40 px-4 py-2 text-sm font-medium text-primary transition hover:border-primary hover:bg-primary/10"
               >
                 Run payroll
+              </Link>
+              <Link
+                href="/dashboard/records"
+                className="inline-flex rounded-lg border border-primary/40 px-4 py-2 text-sm font-medium text-primary transition hover:border-primary hover:bg-primary/10"
+              >
+                Employee records
               </Link>
             </>
           ) : null}

@@ -14,6 +14,7 @@ import {
   UserCog,
   Users,
   CalendarRange,
+  FolderOpen,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -85,6 +86,11 @@ function buildNavItems(team: TeamOverview): NavItem[] {
         href: '/dashboard/calendar',
         label: 'Calendar',
         icon: CalendarRange,
+      },
+      {
+        href: '/dashboard/records',
+        label: 'Records',
+        icon: FolderOpen,
       },
     );
   }

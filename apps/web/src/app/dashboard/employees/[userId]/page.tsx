@@ -1,8 +1,28 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import {
+  ArrowLeft,
+  ArrowRight,
+  BadgeCheck,
+  Banknote,
+  Briefcase,
+  Building2,
+  Calendar,
+  CalendarDays,
+  ClipboardList,
+  Clock,
+  Download,
+  ExternalLink,
+  FileText,
+  Plus,
+  Save,
+  Trash2,
+  UserRound,
+  X,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { DateInput, TimeInput } from '@/components/ui/date-input';
@@ -21,24 +41,73 @@ import { useSession } from '@/lib/auth-client';
 import {
   EMPLOYMENT_TYPES,
   PAY_RATE_TYPES,
+  DOCUMENT_CATEGORIES,
+  createEmployeeDocument,
+  deleteEmployeeDocument,
+  downloadEmployeeDocumentFile,
   formatDateLabel,
+  formatDocumentCategory,
+  formatFileSize,
   formatEmploymentPeriod,
   formatEmploymentType,
   formatWorkSchedule,
   getEmployeeRecord,
+  listEmployeeDocuments,
   updateEmployeeLeaveBalances,
   updateEmployeeCompensation,
   updateEmployeeProfile,
   updateEmployeeWorkSchedule,
   WEEKDAY_OPTIONS,
+  type DocumentCategory,
   type EmployeeDetail,
+  type EmployeeDocument,
   type EmploymentType,
   type PayRateType,
 } from '@/lib/employees';
+import {
+  defaultDtrRange,
+  formatDtrDate,
+  formatDtrStatus,
+  formatDtrTime,
+  formatWorkedMinutes,
+  getDtrOverview,
+  getDtrStatusClassName,
+  summarizeEmployeeDtr,
+  type DailyTimeRecord,
+} from '@/lib/dtr';
 import { formatLeaveType, BALANCE_LEAVE_TYPES, formatLeaveStatus, getLeaveStatusClassName } from '@/lib/leave';
+import { isHrRole } from '@/lib/org-roles';
 import { getTeamOverview, type TeamOverview } from '@/lib/team';
 
 const BALANCE_TYPES = BALANCE_LEAVE_TYPES;
+
+function SectionTitle({
+  icon: Icon,
+  children,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  children: React.ReactNode;
+}) {
+  return (
+    <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+      <Icon className="size-5 shrink-0 text-primary" />
+      {children}
+    </h2>
+  );
+}
+
+function canAccessEmployeeRecords(team: TeamOverview): boolean {
+  const member = team.currentMember;
+  if (!member) {
+    return false;
+  }
+
+  return (
+    member.canManageTeam ||
+    member.canInviteEmployees ||
+    isHrRole(member.role)
+  );
+}
 
 export default function EmployeeDetailPage() {
   const router = useRouter();
@@ -71,6 +140,23 @@ export default function EmployeeDetailPage() {
   const [compensationLoading, setCompensationLoading] = useState(false);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [documents, setDocuments] = useState<EmployeeDocument[]>([]);
+  const [documentTitle, setDocumentTitle] = useState('');
+  const [documentCategory, setDocumentCategory] =
+    useState<DocumentCategory>('contract');
+  const [documentNotes, setDocumentNotes] = useState('');
+  const [documentReferenceUrl, setDocumentReferenceUrl] = useState('');
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const documentFileInputRef = useRef<HTMLInputElement>(null);
+  const [documentLoading, setDocumentLoading] = useState(false);
+  const [downloadingDocumentId, setDownloadingDocumentId] = useState<
+    string | null
+  >(null);
+  const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(
+    null,
+  );
+  const [dtrRecords, setDtrRecords] = useState<DailyTimeRecord[]>([]);
+  const [dtrRange, setDtrRange] = useState(defaultDtrRange);
 
   async function loadEmployee(nextYear = periodYear) {
     const record = await getEmployeeRecord(userId, nextYear);
@@ -110,6 +196,22 @@ export default function EmployeeDetailPage() {
     setBalanceInputs(nextBalances);
   }
 
+  async function loadDocuments() {
+    const response = await listEmployeeDocuments(userId);
+    setDocuments(response.documents);
+  }
+
+  async function loadDtr() {
+    const range = defaultDtrRange();
+    setDtrRange(range);
+    const overview = await getDtrOverview({
+      ...range,
+      userId,
+    });
+    const employeeOverview = overview.employees[0];
+    setDtrRecords(employeeOverview?.records ?? []);
+  }
+
   useEffect(() => {
     if (!session || !userId) {
       return;
@@ -117,13 +219,13 @@ export default function EmployeeDetailPage() {
 
     void getTeamOverview()
       .then((overview) => {
-        if (!overview.currentMember?.canInviteEmployees) {
+        if (!canAccessEmployeeRecords(overview)) {
           router.replace('/dashboard');
           return;
         }
 
         setTeam(overview);
-        return loadEmployee();
+        return Promise.all([loadEmployee(), loadDocuments(), loadDtr()]);
       })
       .catch(() => router.replace('/dashboard'));
   }, [router, session, userId]);
@@ -268,6 +370,86 @@ export default function EmployeeDetailPage() {
     }
   }
 
+  async function handleDocumentSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!documentFile && !documentReferenceUrl.trim()) {
+      toast.error('Upload a file or add a reference URL.');
+      return;
+    }
+
+    setDocumentLoading(true);
+
+    try {
+      await createEmployeeDocument(userId, {
+        title: documentTitle,
+        category: documentCategory,
+        notes: documentNotes || undefined,
+        referenceUrl: documentReferenceUrl || undefined,
+        file: documentFile,
+      });
+      setDocumentTitle('');
+      setDocumentNotes('');
+      setDocumentReferenceUrl('');
+      setDocumentFile(null);
+      if (documentFileInputRef.current) {
+        documentFileInputRef.current.value = '';
+      }
+      await loadDocuments();
+      toast.success('Document added.');
+    } catch (submitError) {
+      toast.error(
+        submitError instanceof Error
+          ? submitError.message
+          : 'Unable to add document.',
+      );
+    } finally {
+      setDocumentLoading(false);
+    }
+  }
+
+  async function handleDownloadDocument(document: EmployeeDocument) {
+    if (!document.hasFile || !document.fileName) {
+      return;
+    }
+
+    setDownloadingDocumentId(document.id);
+
+    try {
+      await downloadEmployeeDocumentFile(
+        userId,
+        document.id,
+        document.fileName,
+      );
+    } catch (submitError) {
+      toast.error(
+        submitError instanceof Error
+          ? submitError.message
+          : 'Unable to download file.',
+      );
+    } finally {
+      setDownloadingDocumentId(null);
+    }
+  }
+
+  async function handleDeleteDocument(documentId: string) {
+    setDeletingDocumentId(documentId);
+
+    try {
+      await deleteEmployeeDocument(userId, documentId);
+      await loadDocuments();
+      toast.success('Document removed.');
+    } catch (submitError) {
+      toast.error(
+        submitError instanceof Error
+          ? submitError.message
+          : 'Unable to remove document.',
+      );
+    } finally {
+      setDeletingDocumentId(null);
+    }
+  }
+
   if (!team || !employee) {
     return (
       <div className="space-y-6 px-6 py-8">
@@ -278,15 +460,23 @@ export default function EmployeeDetailPage() {
   }
 
   const branch = team.branches.find((item) => item._id === employee.branchId);
+  const backHref = team.currentMember?.canInviteEmployees
+    ? '/dashboard/employees'
+    : '/dashboard/records';
+  const backLabel = team.currentMember?.canInviteEmployees
+    ? 'Employees'
+    : 'Employee records';
+  const dtrSummary = summarizeEmployeeDtr(dtrRecords);
 
   return (
     <div className="space-y-8 px-6 py-8">
       <div>
         <Link
-          href="/dashboard/employees"
-          className="text-sm text-muted-foreground transition hover:text-foreground"
+          href={backHref}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground"
         >
-          ← Employees
+          <ArrowLeft className="size-4" />
+          {backLabel}
         </Link>
         <h1 className="mt-2 text-2xl font-semibold text-foreground">
           {employee.name}
@@ -295,10 +485,11 @@ export default function EmployeeDetailPage() {
       </div>
 
         <section className="rounded-2xl border border-border bg-card p-6">
-          <h2 className="text-lg font-semibold text-foreground">Employment overview</h2>
+          <SectionTitle icon={Briefcase}>Employment overview</SectionTitle>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <article className="rounded-xl border border-border bg-muted/30 p-4">
-              <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground">
+              <p className="flex items-center gap-1.5 text-xs uppercase tracking-[0.15em] text-muted-foreground">
+                <BadgeCheck className="size-3.5" />
                 Status
               </p>
               <p className="mt-2 font-medium text-foreground">
@@ -306,7 +497,8 @@ export default function EmployeeDetailPage() {
               </p>
             </article>
             <article className="rounded-xl border border-border bg-muted/30 p-4">
-              <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground">
+              <p className="flex items-center gap-1.5 text-xs uppercase tracking-[0.15em] text-muted-foreground">
+                <Building2 className="size-3.5" />
                 Branch
               </p>
               <p className="mt-2 font-medium text-foreground">
@@ -314,7 +506,8 @@ export default function EmployeeDetailPage() {
               </p>
             </article>
             <article className="rounded-xl border border-border bg-muted/30 p-4">
-              <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground">
+              <p className="flex items-center gap-1.5 text-xs uppercase tracking-[0.15em] text-muted-foreground">
+                <FileText className="size-3.5" />
                 Contract period
               </p>
               <p className="mt-2 font-medium text-foreground">
@@ -322,7 +515,8 @@ export default function EmployeeDetailPage() {
               </p>
             </article>
             <article className="rounded-xl border border-border bg-muted/30 p-4">
-              <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground">
+              <p className="flex items-center gap-1.5 text-xs uppercase tracking-[0.15em] text-muted-foreground">
+                <Calendar className="size-3.5" />
                 Hired
               </p>
               <p className="mt-2 font-medium text-foreground">
@@ -330,7 +524,8 @@ export default function EmployeeDetailPage() {
               </p>
             </article>
             <article className="rounded-xl border border-border bg-muted/30 p-4">
-              <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground">
+              <p className="flex items-center gap-1.5 text-xs uppercase tracking-[0.15em] text-muted-foreground">
+                <Clock className="size-3.5" />
                 Work schedule
               </p>
               <p className="mt-2 font-medium text-foreground">
@@ -341,7 +536,7 @@ export default function EmployeeDetailPage() {
         </section>
 
         <section className="rounded-2xl border border-border bg-card p-6">
-          <h2 className="text-lg font-semibold text-foreground">Work schedule</h2>
+          <SectionTitle icon={Clock}>Work schedule</SectionTitle>
           <p className="mt-2 text-sm text-muted-foreground">
             Set weekly rest days and shift hours. Scheduled day offs are not
             counted as absences in DTR.
@@ -405,8 +600,9 @@ export default function EmployeeDetailPage() {
                 <button
                   type="button"
                   onClick={handleAddDayOff}
-                  className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 transition hover:border-slate-500 hover:text-white"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 transition hover:border-slate-500 hover:text-white"
                 >
+                  <Plus className="size-4" />
                   Add day off
                 </button>
               </div>
@@ -428,7 +624,7 @@ export default function EmployeeDetailPage() {
                         className="text-slate-500 transition hover:text-white"
                         aria-label={`Remove ${date}`}
                       >
-                        ×
+                        <X className="size-3.5" />
                       </button>
                     </span>
                   ))}
@@ -444,13 +640,14 @@ export default function EmployeeDetailPage() {
               loadingText="Saving…"
               className="rounded-lg bg-emerald-500 px-5 py-2.5 font-medium text-slate-950 transition hover:bg-emerald-400"
             >
+              <Save className="size-4" />
               Save work schedule
             </LoadingButton>
           </form>
         </section>
 
         <section className="rounded-2xl border border-border bg-card p-6">
-          <h2 className="text-lg font-semibold text-foreground">Employment profile</h2>
+          <SectionTitle icon={UserRound}>Employment profile</SectionTitle>
           <p className="mt-2 text-sm text-muted-foreground">
             Set employment type, contract dates, and probation period.
           </p>
@@ -545,13 +742,14 @@ export default function EmployeeDetailPage() {
             </div>
 
             <LoadingButton type="submit" loading={profileLoading} loadingText="Saving…">
+              <Save className="size-4" />
               Save profile
             </LoadingButton>
           </form>
         </section>
 
         <section className="rounded-2xl border border-border bg-card p-6">
-          <h2 className="text-lg font-semibold text-foreground">Pay rate</h2>
+          <SectionTitle icon={Banknote}>Pay rate</SectionTitle>
           <p className="mt-2 text-sm text-muted-foreground">
             Set how this employee is paid — per hour or a fixed monthly amount.
             Used for payroll and holiday premium calculations.
@@ -610,6 +808,7 @@ export default function EmployeeDetailPage() {
               loading={compensationLoading}
               loadingText="Saving…"
             >
+              <Save className="size-4" />
               Save pay rate
             </LoadingButton>
           </form>
@@ -618,7 +817,7 @@ export default function EmployeeDetailPage() {
         <section className="rounded-2xl border border-border bg-card p-6">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-foreground">Leave balances</h2>
+              <SectionTitle icon={CalendarDays}>Leave balances</SectionTitle>
               <p className="mt-2 text-sm text-muted-foreground">
                 Set how many days this employee can take per leave type.
               </p>
@@ -698,13 +897,295 @@ export default function EmployeeDetailPage() {
               loadingText="Saving…"
               className="rounded-lg bg-emerald-500 px-5 py-2.5 font-medium text-slate-950 transition hover:bg-emerald-400"
             >
+              <Save className="size-4" />
               Save leave balances
             </LoadingButton>
           </form>
         </section>
 
         <section className="rounded-2xl border border-border bg-card p-6">
-          <h2 className="text-lg font-semibold text-foreground">Leave history</h2>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <SectionTitle icon={ClipboardList}>Attendance history</SectionTitle>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Daily time records for {dtrRange.startDate} to {dtrRange.endDate}.
+              </p>
+            </div>
+            <Link
+              href="/dashboard/dtr"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-primary transition hover:text-primary/80"
+            >
+              Open full DTR
+              <ExternalLink className="size-3.5" />
+            </Link>
+          </div>
+
+          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <article className="rounded-xl border border-border bg-muted/30 p-4">
+              <p className="text-xs text-muted-foreground">Present</p>
+              <p className="mt-2 font-semibold text-foreground">
+                {dtrSummary.presentDays}
+              </p>
+            </article>
+            <article className="rounded-xl border border-border bg-muted/30 p-4">
+              <p className="text-xs text-muted-foreground">Complete</p>
+              <p className="mt-2 font-semibold text-primary">
+                {dtrSummary.completeDays}
+              </p>
+            </article>
+            <article className="rounded-xl border border-border bg-muted/30 p-4">
+              <p className="text-xs text-muted-foreground">Absent</p>
+              <p className="mt-2 font-semibold text-muted-foreground">
+                {dtrSummary.absentDays}
+              </p>
+            </article>
+            <article className="rounded-xl border border-border bg-muted/30 p-4">
+              <p className="text-xs text-muted-foreground">Incomplete</p>
+              <p className="mt-2 font-semibold text-orange-400">
+                {dtrSummary.incompleteDays}
+              </p>
+            </article>
+            <article className="rounded-xl border border-border bg-muted/30 p-4">
+              <p className="text-xs text-muted-foreground">Total hours</p>
+              <p className="mt-2 font-semibold text-foreground">
+                {formatWorkedMinutes(dtrSummary.totalMinutes)}
+              </p>
+            </article>
+          </div>
+
+          <div className="mt-6 overflow-hidden rounded-xl border border-border">
+            <table className="w-full table-auto text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/20 text-left text-muted-foreground">
+                  <th className="px-4 py-3 font-medium">Date</th>
+                  <th className="px-4 py-3 font-medium">Time in</th>
+                  <th className="px-4 py-3 font-medium">Time out</th>
+                  <th className="px-4 py-3 font-medium">Hours</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dtrRecords.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="px-4 py-6 text-center text-muted-foreground"
+                    >
+                      No attendance records for this period.
+                    </td>
+                  </tr>
+                ) : (
+                  [...dtrRecords].reverse().slice(0, 14).map((record) => (
+                    <tr
+                      key={record.date}
+                      className="border-b border-border/70 last:border-b-0"
+                    >
+                      <td className="px-4 py-3 text-foreground">
+                        {formatDtrDate(record.date)}
+                      </td>
+                      <td className="px-4 py-3 text-foreground">
+                        {formatDtrTime(record.timeIn)}
+                      </td>
+                      <td className="px-4 py-3 text-foreground">
+                        {formatDtrTime(record.timeOut)}
+                      </td>
+                      <td className="px-4 py-3 text-foreground">
+                        {formatWorkedMinutes(record.workedMinutes)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs ${getDtrStatusClassName(record.status)}`}
+                        >
+                          {formatDtrStatus(record.status)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-border bg-card p-6">
+          <SectionTitle icon={FileText}>Documents</SectionTitle>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Upload files from your computer or add a reference link for
+            documents stored elsewhere. Supported: PDF, PNG, JPG, WEBP, DOC,
+            DOCX (max 10 MB).
+          </p>
+
+          <form className="mt-6 space-y-4" onSubmit={handleDocumentSubmit}>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="block space-y-2">
+                <span className="text-sm text-muted-foreground">Title</span>
+                <Input
+                  value={documentTitle}
+                  onChange={(event) => setDocumentTitle(event.target.value)}
+                  placeholder="Employment contract"
+                  required
+                />
+              </label>
+              <label className="block space-y-2">
+                <span className="text-sm text-muted-foreground">Category</span>
+                <Select
+                  value={documentCategory}
+                  onValueChange={(value) =>
+                    setDocumentCategory(value as DocumentCategory)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DOCUMENT_CATEGORIES.map((category) => (
+                      <SelectItem key={category.value} value={category.value}>
+                        {category.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+            </div>
+
+            <label className="block space-y-2">
+              <span className="text-sm text-muted-foreground">File (optional)</span>
+              <input
+                ref={documentFileInputRef}
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,application/pdf,image/png,image/jpeg,image/webp,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                className="flex h-10 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1 file:font-medium file:text-foreground"
+                onChange={(event) => {
+                  const nextFile = event.target.files?.[0] ?? null;
+                  setDocumentFile(nextFile);
+                }}
+              />
+              {documentFile ? (
+                <p className="text-xs text-muted-foreground">
+                  Selected: {documentFile.name} ({formatFileSize(documentFile.size)})
+                </p>
+              ) : null}
+            </label>
+
+            <label className="block space-y-2">
+              <span className="text-sm text-muted-foreground">
+                Reference URL (optional)
+              </span>
+              <Input
+                value={documentReferenceUrl}
+                onChange={(event) => setDocumentReferenceUrl(event.target.value)}
+                placeholder="https://drive.google.com/..."
+              />
+            </label>
+
+            <label className="block space-y-2">
+              <span className="text-sm text-muted-foreground">Notes (optional)</span>
+              <Textarea
+                value={documentNotes}
+                onChange={(event) => setDocumentNotes(event.target.value)}
+                placeholder="Version, expiry date, or storage location"
+                rows={3}
+              />
+            </label>
+
+            <LoadingButton
+              type="submit"
+              loading={documentLoading}
+              loadingText="Saving…"
+            >
+              <Plus className="size-4" />
+              Add document
+            </LoadingButton>
+          </form>
+
+          <div className="mt-8 space-y-3">
+            {documents.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                No documents recorded yet.
+              </p>
+            ) : (
+              documents.map((document) => (
+                <article
+                  key={document.id}
+                  className="rounded-xl border border-border bg-muted/30 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium text-foreground">
+                        {document.title}
+                      </p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {formatDocumentCategory(document.category)}
+                        {' · Added '}
+                        {formatDateLabel(document.createdAt.slice(0, 10))}
+                        {document.fileSize
+                          ? ` · ${formatFileSize(document.fileSize)}`
+                          : ''}
+                      </p>
+                      {document.fileName ? (
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          File: {document.fileName}
+                        </p>
+                      ) : null}
+                      {document.notes ? (
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          {document.notes}
+                        </p>
+                      ) : null}
+                      {document.referenceUrl ? (
+                        <a
+                          href={document.referenceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2 inline-flex items-center gap-1.5 text-sm text-primary transition hover:text-primary/80"
+                        >
+                          Open reference
+                          <ExternalLink className="size-3.5" />
+                        </a>
+                      ) : null}
+                      {document.hasFile ? (
+                        <LoadingButton
+                          type="button"
+                          variant="outline"
+                          size="xs"
+                          className="mt-2"
+                          loading={downloadingDocumentId === document.id}
+                          loadingText="Downloading…"
+                          onClick={() => handleDownloadDocument(document)}
+                          disabled={
+                            downloadingDocumentId !== null &&
+                            downloadingDocumentId !== document.id
+                          }
+                        >
+                          <Download className="size-3.5" />
+                          Download file
+                        </LoadingButton>
+                      ) : null}
+                    </div>
+                    <LoadingButton
+                      type="button"
+                      variant="destructive"
+                      size="xs"
+                      loading={deletingDocumentId === document.id}
+                      loadingText="Removing…"
+                      onClick={() => handleDeleteDocument(document.id)}
+                      disabled={
+                        deletingDocumentId !== null &&
+                        deletingDocumentId !== document.id
+                      }
+                    >
+                      <Trash2 className="size-3.5" />
+                      Remove
+                    </LoadingButton>
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-border bg-card p-6">
+          <SectionTitle icon={CalendarDays}>Leave history</SectionTitle>
           <p className="mt-2 text-sm text-muted-foreground">
             All leave requests submitted by this employee.
           </p>
@@ -725,8 +1206,9 @@ export default function EmployeeDetailPage() {
                       <p className="font-medium text-white">
                         {formatLeaveType(request.leaveType)}
                       </p>
-                      <p className="mt-1 text-sm text-slate-400">
-                        {formatDateLabel(request.startDate)} →{' '}
+                      <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-slate-400">
+                        {formatDateLabel(request.startDate)}
+                        <ArrowRight className="size-3.5 shrink-0" />
                         {formatDateLabel(request.endDate)}
                         {request.requestedDays
                           ? ` · ${request.requestedDays} day(s)`

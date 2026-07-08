@@ -28,3 +28,6 @@ coverage/
 
 # Misc
 *.tsbuildinfo
+
+# Uploaded files
+apps/api/uploads/
