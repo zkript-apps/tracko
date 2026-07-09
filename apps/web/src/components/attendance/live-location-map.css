@@ -1,0 +1,35 @@
+.tracko-map-popup .leaflet-popup-content-wrapper {
+  border-radius: 14px;
+  border: 1px solid rgb(226 232 240);
+  box-shadow:
+    0 12px 32px rgb(15 23 42 / 0.12),
+    0 2px 6px rgb(15 23 42 / 0.06);
+  padding: 0;
+}
+
+.tracko-map-popup .leaflet-popup-content {
+  margin: 0;
+  line-height: 1.4;
+  width: 260px !important;
+}
+
+.tracko-map-popup .leaflet-popup-close-button {
+  top: 10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: 18px;
+  line-height: 22px;
+  color: rgb(100 116 139);
+  border-radius: 6px;
+}
+
+.tracko-map-popup .leaflet-popup-close-button:hover {
+  background: rgb(241 245 249);
+  color: rgb(51 65 85);
+}
+
+.tracko-map-popup .leaflet-popup-tip {
+  box-shadow: none;
+}

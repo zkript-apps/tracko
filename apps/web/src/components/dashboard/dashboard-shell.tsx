@@ -8,6 +8,7 @@ import {
   ClipboardList,
   Clock,
   CreditCard,
+  Fingerprint,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -31,7 +32,7 @@ import {
   getOrganizationSubscription,
   type BillableFeatureId,
 } from '@/lib/billing';
-import { formatOrgRole } from '@/lib/org-roles';
+import { formatOrgRole, isHrRole } from '@/lib/org-roles';
 import { cn } from '@/lib/utils';
 import type { TeamOverview } from '@/lib/team';
 
@@ -62,6 +63,14 @@ function buildNavItems(
       exact: true,
     },
   ];
+
+  if (isHrRole(team.currentMember?.role)) {
+    items.push({
+      href: '/employee',
+      label: 'Clock in/out',
+      icon: Fingerprint,
+    });
+  }
 
   const canManageWorkforce =
     team.currentMember?.canManageTeam ||

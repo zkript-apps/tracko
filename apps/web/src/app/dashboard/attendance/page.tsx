@@ -166,17 +166,8 @@ export default function AttendancePage() {
 
     const timer = window.setInterval(refresh, LIVE_LOCATION_REFRESH_MS);
 
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        refresh();
-      }
-    };
-
-    document.addEventListener('visibilitychange', onVisibilityChange);
-
     return () => {
       window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [liveTrackingEnabled, refreshAttendanceData, team]);
 

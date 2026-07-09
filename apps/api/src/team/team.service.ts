@@ -6,10 +6,12 @@ import {
 import { AuthService } from '@thallesp/nestjs-better-auth';
 import { fromNodeHeaders } from 'better-auth/node';
 import type { Request } from 'express';
-import { ORG_ADMIN_ROLES, HR_ROLES } from '../auth/org-roles';
+import { ORG_ADMIN_ROLES, HR_ROLES, resolveWorkforceRole } from '../auth/org-roles';
+import { updateEmployeeProfile } from '../workforce/employees/employee-profiles.store';
 import {
   findAssignmentByUserId,
   listAssignmentsByOrganization,
+  updateBranchAssignment,
 } from '../organizations/branch-assignments.store';
 import {
   getBranchById,
@@ -118,7 +120,7 @@ export class TeamService {
       return {
         id: member.id,
         userId: member.userId,
-        role: member.role,
+        role: resolveWorkforceRole(member.role, assignment?.role),
         user: member.user,
         branch: branch
           ? { id: branch._id, name: branch.name, city: branch.city }
@@ -287,6 +289,103 @@ export class TeamService {
     return {
       invitation,
       inviteUrl: buildAcceptInviteUrl(invitation.id, webUrl),
+    };
+  }
+
+  async reassignMember(
+    request: Request,
+    input: { userId: string; branchId: string },
+  ) {
+    const headers = this.headersFrom(request);
+    const { fullOrganization, userId: actorUserId } =
+      await this.ensureActiveOrganization(headers);
+    const activeMember = await this.resolveCurrentMember(
+      headers,
+      fullOrganization,
+      actorUserId,
+    );
+
+    if (
+      !activeMember ||
+      !ORG_ADMIN_ROLES.includes(
+        activeMember.role as (typeof ORG_ADMIN_ROLES)[number],
+      )
+    ) {
+      throw new ForbiddenException(
+        'Only organization admins can reassign members.',
+      );
+    }
+
+    const targetMember = fullOrganization.members?.find(
+      (member: { userId: string }) => member.userId === input.userId,
+    );
+
+    if (!targetMember) {
+      throw new BadRequestException('Member not found in this organization.');
+    }
+
+    if (
+      ORG_ADMIN_ROLES.includes(
+        targetMember.role as (typeof ORG_ADMIN_ROLES)[number],
+      )
+    ) {
+      throw new BadRequestException(
+        'Organization admins are not assigned to branches.',
+      );
+    }
+
+    if (
+      targetMember.role !== 'hr' &&
+      targetMember.role !== 'employee'
+    ) {
+      throw new BadRequestException('Only HR and employees can be reassigned.');
+    }
+
+    const branch = await getBranchById(input.branchId);
+    if (
+      !branch ||
+      String(branch.organizationId) !== String(fullOrganization.id)
+    ) {
+      throw new BadRequestException('Invalid branch.');
+    }
+
+    const existingAssignment = await findAssignmentByUserId(
+      fullOrganization.id,
+      input.userId,
+    );
+
+    if (!existingAssignment) {
+      throw new BadRequestException('Member has no branch assignment.');
+    }
+
+    if (existingAssignment.branchId === input.branchId) {
+      throw new BadRequestException('Member is already assigned to this branch.');
+    }
+
+    const updatedAssignment = await updateBranchAssignment({
+      organizationId: fullOrganization.id,
+      userId: input.userId,
+      branchId: input.branchId,
+    });
+
+    if (!updatedAssignment) {
+      throw new BadRequestException('Unable to update branch assignment.');
+    }
+
+    if (targetMember.role === 'employee') {
+      await updateEmployeeProfile({
+        organizationId: fullOrganization.id,
+        userId: input.userId,
+        branchId: input.branchId,
+        updatedBy: actorUserId,
+      });
+    }
+
+    return {
+      userId: input.userId,
+      branchId: input.branchId,
+      branchName: branch.name,
+      role: targetMember.role,
     };
   }
 }

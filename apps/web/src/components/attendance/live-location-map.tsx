@@ -9,8 +9,16 @@ import {
   useMap,
 } from 'react-leaflet';
 import L from 'leaflet';
+import {
+  Building2,
+  Clock3,
+  Crosshair,
+  Mail,
+} from 'lucide-react';
 import type { LiveLocationEmployee } from '@/lib/attendance';
+import { cn } from '@/lib/utils';
 import 'leaflet/dist/leaflet.css';
+import './live-location-map.css';
 
 const markerIcon = L.icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -37,21 +45,157 @@ function useNow(intervalMs = 30_000): number {
   return now;
 }
 
-function formatUpdatedAgo(iso: string, now: number): string {
-  const minutes = Math.max(
-    0,
-    Math.round((now - new Date(iso).getTime()) / 60_000),
-  );
+function getInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
+}
 
-  if (minutes <= 0) {
-    return 'Location ping just now';
+type Freshness = 'live' | 'recent' | 'stale';
+
+function getFreshness(recordedAt: string, now: number): Freshness {
+  const ageMs = now - new Date(recordedAt).getTime();
+
+  if (ageMs < 2 * 60_000) {
+    return 'live';
   }
+
+  if (ageMs < 10 * 60_000) {
+    return 'recent';
+  }
+
+  return 'stale';
+}
+
+function formatRelativePing(recordedAt: string, now: number): string {
+  const ageMs = Math.max(0, now - new Date(recordedAt).getTime());
+  const seconds = Math.round(ageMs / 1000);
+
+  if (seconds < 60) {
+    return 'Updated just now';
+  }
+
+  const minutes = Math.round(ageMs / 60_000);
 
   if (minutes === 1) {
-    return 'Location ping 1 min ago';
+    return 'Updated 1 min ago';
   }
 
-  return `Location ping ${minutes} min ago`;
+  if (minutes < 60) {
+    return `Updated ${minutes} min ago`;
+  }
+
+  const hours = Math.round(minutes / 60);
+  return hours === 1 ? 'Updated 1 hr ago' : `Updated ${hours} hr ago`;
+}
+
+function formatExactTime(iso: string): string {
+  return new Date(iso).toLocaleString('en-PH', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function formatAccuracy(accuracy: number | null): string | null {
+  if (accuracy == null || !Number.isFinite(accuracy)) {
+    return null;
+  }
+
+  if (accuracy < 1000) {
+    return `±${Math.round(accuracy)} m`;
+  }
+
+  return `±${(accuracy / 1000).toFixed(1)} km`;
+}
+
+function FreshnessBadge({ freshness }: { freshness: Freshness }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+        freshness === 'live' &&
+          'bg-emerald-500/15 text-emerald-700',
+        freshness === 'recent' &&
+          'bg-amber-500/15 text-amber-700',
+        freshness === 'stale' && 'bg-slate-500/15 text-slate-600',
+      )}
+    >
+      <span
+        className={cn(
+          'size-1.5 rounded-full',
+          freshness === 'live' && 'bg-emerald-500',
+          freshness === 'recent' && 'bg-amber-500',
+          freshness === 'stale' && 'bg-slate-400',
+        )}
+      />
+      {freshness === 'live' ? 'Live' : freshness === 'recent' ? 'Recent' : 'Stale'}
+    </span>
+  );
+}
+
+function MetaRow({
+  icon: Icon,
+  children,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-2.5 text-xs text-slate-600">
+      <Icon className="mt-0.5 size-3.5 shrink-0 text-slate-400" />
+      <span className="min-w-0 wrap-break-word leading-snug">{children}</span>
+    </div>
+  );
+}
+
+function LocationPopupContent({
+  employee,
+  branchName,
+  now,
+}: {
+  employee: LiveLocationEmployee;
+  branchName: string;
+  now: number;
+}) {
+  const freshness = getFreshness(employee.recordedAt, now);
+  const accuracyLabel = formatAccuracy(employee.accuracy);
+
+  return (
+    <div className="p-3.5 pr-8">
+      <div className="flex items-start gap-3">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-500/12 text-sm font-semibold text-emerald-800">
+          {getInitials(employee.name)}
+        </div>
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div className="flex items-start justify-between gap-2">
+            <p className="truncate text-sm font-semibold text-slate-900">
+              {employee.name}
+            </p>
+            <FreshnessBadge freshness={freshness} />
+          </div>
+          <p className="text-[11px] text-slate-500">
+            {formatRelativePing(employee.recordedAt, now)}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+        {employee.email ? (
+          <MetaRow icon={Mail}>{employee.email}</MetaRow>
+        ) : null}
+        <MetaRow icon={Building2}>{branchName}</MetaRow>
+        <MetaRow icon={Clock3}>{formatExactTime(employee.recordedAt)}</MetaRow>
+        {accuracyLabel ? (
+          <MetaRow icon={Crosshair}>{accuracyLabel} accuracy</MetaRow>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 function FitBounds({ employees }: { employees: LiveLocationEmployee[] }) {
@@ -91,6 +235,7 @@ function EmployeeMarker({
 }) {
   const markerRef = useRef<L.Marker>(null);
   const position: [number, number] = [employee.latitude, employee.longitude];
+  const branchName = branchNames[employee.branchId] ?? 'Assigned branch';
 
   useEffect(() => {
     markerRef.current?.setLatLng(position);
@@ -98,19 +243,12 @@ function EmployeeMarker({
 
   return (
     <Marker ref={markerRef} position={position} icon={markerIcon}>
-      <Popup>
-        <div className="space-y-1 text-sm">
-          <p className="font-medium">{employee.name}</p>
-          {employee.email ? (
-            <p className="text-muted-foreground">{employee.email}</p>
-          ) : null}
-          <p className="text-muted-foreground">
-            {branchNames[employee.branchId] ?? 'Assigned branch'}
-          </p>
-          <p className="text-muted-foreground">
-            {formatUpdatedAgo(employee.recordedAt, now)}
-          </p>
-        </div>
+      <Popup className="tracko-map-popup" closeButton>
+        <LocationPopupContent
+          employee={employee}
+          branchName={branchName}
+          now={now}
+        />
       </Popup>
     </Marker>
   );

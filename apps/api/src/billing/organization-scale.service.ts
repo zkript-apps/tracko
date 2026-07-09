@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { isWorkforceStaffRole } from '../auth/org-roles';
 import { listAssignmentsByOrganization } from '../organizations/branch-assignments.store';
 import {
   resolveScaleTierFromEmployeeCount,
@@ -9,8 +10,9 @@ import {
 export class OrganizationScaleService {
   async countEmployees(organizationId: string): Promise<number> {
     const assignments = await listAssignmentsByOrganization(organizationId);
-    return assignments.filter((assignment) => assignment.role === 'employee')
-      .length;
+    return assignments.filter((assignment) =>
+      isWorkforceStaffRole(assignment.role),
+    ).length;
   }
 
   async resolveScaleTier(organizationId: string): Promise<{

@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { getMongoDb } from '../../database/mongo';
+import { isWorkforceStaffRole } from '../../auth/org-roles';
 import {
   listAssignmentsByOrganization,
   type BranchAssignment,
@@ -98,7 +99,7 @@ export class PayrollService {
     );
     const branchAssignments = assignments.filter(
       (assignment: BranchAssignment) =>
-        assignment.role === 'employee' &&
+        isWorkforceStaffRole(assignment.role) &&
         (!input.branchId || assignment.branchId === input.branchId),
     );
 

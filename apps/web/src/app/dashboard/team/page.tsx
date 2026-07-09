@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { Button } from '@/components/ui/button';
+import { NativeSelect } from '@/components/ui/native-select';
 import {
   Sheet,
   SheetContent,
@@ -19,8 +20,9 @@ import {
   isEmployeeRole,
   isHrRole,
   isOrgAdminRole,
+  isWorkforceStaffRole,
 } from '@/lib/org-roles';
-import { getTeamOverview, inviteHrMember, cancelOrgInvitation, type TeamOverview } from '@/lib/team';
+import { getTeamOverview, inviteHrMember, cancelOrgInvitation, reassignTeamMember, type TeamOverview } from '@/lib/team';
 import { buildAcceptInviteUrl } from '@/lib/invite-url';
 
 function getHeadOfficeBranchId(team: TeamOverview): string {
@@ -48,6 +50,8 @@ export default function TeamPage() {
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [reassigningUserId, setReassigningUserId] = useState<string | null>(null);
+  const [branchSelections, setBranchSelections] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!session) {
@@ -145,6 +149,11 @@ export default function TeamPage() {
     [branchMembers],
   );
 
+  const branchWorkforceCount = useMemo(
+    () => branchMembers.filter((member) => isWorkforceStaffRole(member.role)).length,
+    [branchMembers],
+  );
+
   const filteredInvitations = useMemo(() => {
     if (!team || !memberBranchFilter) {
       return [];
@@ -159,6 +168,91 @@ export default function TeamPage() {
     () => team?.branches.find((branch) => branch._id === memberBranchFilter) ?? null,
     [memberBranchFilter, team],
   );
+
+  useEffect(() => {
+    if (!team) {
+      return;
+    }
+
+    setBranchSelections((current) => {
+      const next = { ...current };
+
+      for (const member of team.members) {
+        if (member.branch?.id && !next[member.userId]) {
+          next[member.userId] = member.branch.id;
+        }
+      }
+
+      return next;
+    });
+  }, [team]);
+
+  async function handleReassignMember(userId: string) {
+    const branchId = branchSelections[userId];
+    if (!branchId) {
+      return;
+    }
+
+    setReassigningUserId(userId);
+
+    try {
+      const result = await reassignTeamMember({ userId, branchId });
+      const overview = await getTeamOverview();
+      setTeam(overview);
+      toast.success(`Moved to ${result.branchName}.`);
+    } catch (reassignError) {
+      toast.error(
+        reassignError instanceof Error
+          ? reassignError.message
+          : 'Unable to reassign member.',
+      );
+    } finally {
+      setReassigningUserId(null);
+    }
+  }
+
+  function renderReassignControls(member: TeamOverview['members'][number]) {
+    if (!member.branch) {
+      return null;
+    }
+
+    const selectedBranchId = branchSelections[member.userId] ?? member.branch.id;
+    const canReassign = selectedBranchId !== member.branch.id;
+
+    return (
+      <div className="mt-4 flex flex-col gap-3 border-t border-slate-800 pt-4 sm:flex-row sm:items-end">
+        <label className="block min-w-0 flex-1 space-y-2">
+          <span className="text-xs text-slate-500">Reassign to branch</span>
+          <NativeSelect
+            value={selectedBranchId}
+            onChange={(event) =>
+              setBranchSelections((current) => ({
+                ...current,
+                [member.userId]: event.target.value,
+              }))
+            }
+          >
+            {team?.branches.map((branch) => (
+              <option key={branch._id} value={branch._id}>
+                {formatBranchName(branch)}
+              </option>
+            ))}
+          </NativeSelect>
+        </label>
+        <LoadingButton
+          type="button"
+          variant="outline"
+          loading={reassigningUserId === member.userId}
+          loadingText="Saving…"
+          disabled={!canReassign || reassigningUserId !== null}
+          onClick={() => handleReassignMember(member.userId)}
+          className="shrink-0"
+        >
+          Reassign
+        </LoadingButton>
+      </div>
+    );
+  }
 
   function handleBranchFilterChange(nextBranchId: string) {
     setMemberBranchFilter(nextBranchId);
@@ -208,19 +302,18 @@ export default function TeamPage() {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 disabled={loading}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2 disabled:opacity-60"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-3 pr-10 text-white outline-none ring-emerald-500 focus:ring-2 disabled:opacity-60"
                 placeholder="hr@company.com"
               />
             </label>
 
             <label className="block space-y-2">
               <span className="text-sm text-slate-300">Branch</span>
-              <select
+              <NativeSelect
                 required
                 value={branchId}
                 onChange={(event) => setBranchId(event.target.value)}
                 disabled={loading}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2 disabled:opacity-60"
               >
                 {team.branches.map((branch) => (
                   <option key={branch._id} value={branch._id}>
@@ -229,7 +322,7 @@ export default function TeamPage() {
                     {branch.city ? ` — ${branch.city}` : ''}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
 
             <div className="flex items-end">
@@ -284,19 +377,18 @@ export default function TeamPage() {
                 </h2>
                 <label className="block min-w-[16rem] flex-1 space-y-2 sm:max-w-md">
                   <span className="text-xs text-slate-500">Branch</span>
-                  <select
+                  <NativeSelect
                     value={memberBranchFilter}
                     onChange={(event) =>
                       handleBranchFilterChange(event.target.value)
                     }
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none ring-emerald-500 focus:ring-2"
                   >
                     {team.branches.map((branch) => (
                       <option key={branch._id} value={branch._id}>
                         {formatBranchName(branch)}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </label>
               </div>
 
@@ -324,6 +416,7 @@ export default function TeamPage() {
                           {formatOrgRole(member.role)}
                         </span>
                       </div>
+                      {renderReassignControls(member)}
                     </article>
                   ))
                 )}
@@ -331,10 +424,10 @@ export default function TeamPage() {
                 <article className="rounded-xl border border-slate-800 bg-slate-900 p-4">
                   <p className="text-sm text-slate-400">Employees</p>
                   <p className="mt-2 text-2xl font-semibold text-white">
-                    {branchEmployeeMembers.length}
+                    {branchWorkforceCount}
                   </p>
                   <p className="mt-1 text-sm text-slate-500">
-                    {branchEmployeeMembers.length === 1
+                    {branchWorkforceCount === 1
                       ? 'employee in this branch'
                       : 'employees in this branch'}
                   </p>
@@ -412,8 +505,8 @@ export default function TeamPage() {
             <SheetDescription>
               {branchMembers.length} member
               {branchMembers.length === 1 ? '' : 's'} ·{' '}
-              {branchHrMembers.length} HR · {branchEmployeeMembers.length}{' '}
-              employee{branchEmployeeMembers.length === 1 ? '' : 's'}
+              {branchHrMembers.length} HR · {branchWorkforceCount}{' '}
+              employee{branchWorkforceCount === 1 ? '' : 's'}
             </SheetDescription>
           </SheetHeader>
 
@@ -447,6 +540,13 @@ export default function TeamPage() {
                       {formatOrgRole(member.role)}
                     </span>
                   </div>
+                  {member.branch ? (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Current branch: {member.branch.name}
+                      {member.branch.city ? ` — ${member.branch.city}` : ''}
+                    </p>
+                  ) : null}
+                  {renderReassignControls(member)}
                 </article>
               ))
             )}

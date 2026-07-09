@@ -6,6 +6,7 @@ import {
 import type { Request } from 'express';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
 import { ObjectId } from 'mongodb';
+import { isWorkforceStaffRole } from '../../auth/org-roles';
 import { getMongoDb } from '../../database/mongo';
 import {
   listAssignmentsByOrganization,
@@ -419,7 +420,7 @@ export class AttendanceService {
     );
     const branchAssignments = assignments.filter(
       (assignment: BranchAssignment) =>
-        assignment.role === 'employee' &&
+        isWorkforceStaffRole(assignment.role) &&
         (!targetBranchId || assignment.branchId === targetBranchId),
     );
 

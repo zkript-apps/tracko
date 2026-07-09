@@ -12,6 +12,8 @@ import {
   clockIn,
   clockOut,
   formatAttendanceTime,
+  formatElapsedDuration,
+  getActiveClockInTime,
   getMyAttendanceStatus,
   getRequiredLocation,
   postMyLiveLocation,
@@ -36,7 +38,8 @@ import {
   type DailyTimeRecord,
 } from '@/lib/dtr';
 import { getOnboardingStatus } from '@/lib/onboarding';
-import { formatOrgRole } from '@/lib/org-roles';
+import { formatOrgRole, isHrRole } from '@/lib/org-roles';
+import { getAnnouncements, type Announcement } from '@/lib/announcements';
 import {
   cancelLeaveRequest,
   createLeaveRequest,
@@ -79,6 +82,8 @@ export default function EmployeePage() {
   const [leaveLoading, setLeaveLoading] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [locationSharing, setLocationSharing] = useState(false);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [now, setNow] = useState(() => Date.now());
   const locationWatchIdRef = useRef<number | null>(null);
   const locationPostIntervalRef = useRef<number | null>(null);
   const lastLocationPostRef = useRef(0);
@@ -203,7 +208,8 @@ export default function EmployeePage() {
     const status = await getMyAttendanceStatus();
     setAttendance(status);
 
-    const [requests, balances, dtr, biometrics, support] = await Promise.all([
+    const [requests, balances, dtr, biometrics, support, latestAnnouncements] =
+      await Promise.all([
       status.leaveEnabled
         ? getMyLeaveRequests()
         : Promise.resolve([] as LeaveRequest[]),
@@ -213,13 +219,34 @@ export default function EmployeePage() {
       getMyDtrRecords(dtrRange),
       getBiometricStatus(),
       getBiometricSupport(),
+      getAnnouncements(3),
     ]);
     setLeaveRequests(requests);
     setLeaveBalances(balances.leaveBalances);
     setDtrRecords(dtr.records);
     setBiometricStatus(biometrics);
     setBiometricSupport(support);
+    setAnnouncements(latestAnnouncements);
   }, [dtrRange]);
+
+  const activeClockInAt = attendance ? getActiveClockInTime(attendance) : null;
+  const elapsedMs = activeClockInAt
+    ? now - new Date(activeClockInAt).getTime()
+    : null;
+
+  useEffect(() => {
+    if (!activeClockInAt) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [activeClockInAt]);
 
   useEffect(() => {
     if (!attendance) {
@@ -260,7 +287,7 @@ export default function EmployeePage() {
         .then((overview) => {
           const role = overview.currentMember?.role ?? 'member';
 
-          if (role !== 'employee') {
+          if (role !== 'employee' && !isHrRole(role)) {
             router.replace('/dashboard');
             return;
           }
@@ -405,29 +432,44 @@ export default function EmployeePage() {
     Boolean(biometricSupport?.platformAvailable) &&
     !biometricStatus?.enrolled;
 
+  const currentRole = team?.currentMember?.role ?? 'employee';
+  const isHr = isHrRole(currentRole);
+
   return (
     <div className="min-h-screen bg-background text-slate-100">
       <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-6 py-4">
           <div>
             <p className="text-xs uppercase tracking-[0.25em] text-emerald-400">
               Tracko
             </p>
-            <h1 className="text-lg font-semibold">Employee portal</h1>
+            <h1 className="text-lg font-semibold">
+              {isHr ? 'Self-service portal' : 'Employee portal'}
+            </h1>
           </div>
-          <button
-            onClick={handleSignOut}
-            className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
-          >
-            Sign out
-          </button>
+          <div className="flex items-center gap-2">
+            {isHr ? (
+              <Link
+                href="/dashboard"
+                className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
+              >
+                HR dashboard
+              </Link>
+            ) : null}
+            <button
+              onClick={handleSignOut}
+              className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-3xl space-y-8 px-6 py-10">
         <section className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-6">
           <p className="text-xs uppercase tracking-[0.2em] text-emerald-300/80">
-            {formatOrgRole('employee')}
+            {formatOrgRole(currentRole)}
           </p>
           <h2 className="mt-2 text-xl font-semibold text-white">
             Welcome, {session.user.name}
@@ -436,6 +478,49 @@ export default function EmployeePage() {
             {team.organization.name}
             {branchLabel ? ` · ${branchLabel}` : ''}
           </p>
+        </section>
+
+        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Announcements</h2>
+              <p className="mt-2 text-sm text-slate-400">
+                Latest updates from your HR and admin team.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-6 space-y-3">
+            {announcements.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-slate-800 px-3 py-4 text-sm text-slate-500">
+                No announcements yet.
+              </p>
+            ) : (
+              announcements.map((announcement) => (
+                <article
+                  key={announcement.id}
+                  className="rounded-xl border border-slate-800 bg-slate-950 p-4"
+                >
+                  <p className="font-medium text-white">{announcement.title}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {announcement.authorName ?? 'Admin'} ·{' '}
+                    {new Date(announcement.createdAt).toLocaleString('en-PH')}
+                  </p>
+                  <p className="mt-3 whitespace-pre-wrap text-sm text-slate-300">
+                    {announcement.body}
+                  </p>
+                </article>
+              ))
+            )}
+          </div>
+
+          <Link
+            href="/employee/announcements"
+            target="_blank"
+            className="mt-4 inline-block text-sm text-emerald-400 hover:underline"
+          >
+            Show all announcements
+          </Link>
         </section>
 
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
@@ -499,15 +584,28 @@ export default function EmployeePage() {
                   : ''}
               </p>
             </div>
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-medium ${
-                attendance.isClockedIn
-                  ? 'bg-emerald-500/15 text-emerald-300'
-                  : 'bg-slate-800 text-slate-400'
-              }`}
-            >
-              {attendance.isClockedIn ? 'On duty' : 'Off duty'}
-            </span>
+            <div className="flex flex-col items-end gap-2">
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-medium ${
+                  attendance.isClockedIn
+                    ? 'bg-emerald-500/15 text-emerald-300'
+                    : 'bg-slate-800 text-slate-400'
+                }`}
+              >
+                {attendance.isClockedIn ? 'On duty' : 'Off duty'}
+              </span>
+              {elapsedMs !== null && activeClockInAt ? (
+                <div className="text-right">
+                  <p className="text-xs text-slate-500">Time elapsed</p>
+                  <p className="font-mono text-2xl font-semibold tabular-nums text-emerald-300">
+                    {formatElapsedDuration(elapsedMs)}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Since {formatAttendanceTime(activeClockInAt)}
+                  </p>
+                </div>
+              ) : null}
+            </div>
           </div>
 
           <div className="mt-6 flex flex-wrap gap-3">
