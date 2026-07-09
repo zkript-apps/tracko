@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { getMongoDb } from '../../database/mongo';
+import { isWorkforceStaffRole } from '../../auth/org-roles';
 import {
   listAssignmentsByOrganization,
   type BranchAssignment,
@@ -26,6 +27,7 @@ import { buildDailyRecords, validateDateRange } from '../dtr/dtr.util';
 import { listHolidaysForOrganization } from '../holidays/holidays.store';
 import { listApprovedLeaveOverlappingPeriod } from '../leave/leave.store';
 import { WorkforceContextService } from '../workforce-context.service';
+import { BillingService } from '../../billing/billing.service';
 import {
   createPayrollRun,
   finalizePayrollRun,
@@ -50,7 +52,10 @@ function parseRangeEnd(endDate: string): Date {
 
 @Injectable()
 export class PayrollService {
-  constructor(private readonly workforce: WorkforceContextService) {}
+  constructor(
+    private readonly workforce: WorkforceContextService,
+    private readonly billing: BillingService,
+  ) {}
 
   private async requirePayrollAccess(request: Request) {
     const context = await this.workforce.getMemberContext(request);
@@ -58,6 +63,12 @@ export class PayrollService {
     if (!context.canViewBranchAttendance) {
       throw new ForbiddenException('HR or admin access required.');
     }
+
+    await this.billing.requireFeature(
+      context.organizationId,
+      'payroll',
+      'Payroll',
+    );
 
     return context;
   }
@@ -88,7 +99,7 @@ export class PayrollService {
     );
     const branchAssignments = assignments.filter(
       (assignment: BranchAssignment) =>
-        assignment.role === 'employee' &&
+        isWorkforceStaffRole(assignment.role) &&
         (!input.branchId || assignment.branchId === input.branchId),
     );
 

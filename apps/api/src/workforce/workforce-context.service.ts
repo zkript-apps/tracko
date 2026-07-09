@@ -112,12 +112,12 @@ export class WorkforceContextService {
   async requireEmployee(request: Request) {
     const context = await this.getMemberContext(request);
 
-    if (!context.isEmployee) {
-      throw new ForbiddenException('Employee access required.');
+    if (!context.isEmployee && !context.isHr) {
+      throw new ForbiddenException('Employee or HR access required.');
     }
 
     if (!context.branchId) {
-      throw new BadRequestException('Employee has no branch assignment.');
+      throw new BadRequestException('Workforce member has no branch assignment.');
     }
 
     return context;

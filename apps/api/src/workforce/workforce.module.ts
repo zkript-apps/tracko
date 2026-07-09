@@ -1,4 +1,7 @@
 import { Module } from '@nestjs/common';
+import { BillingModule } from '../billing/billing.module';
+import { AnnouncementsController } from './announcements/announcements.controller';
+import { AnnouncementsService } from './announcements/announcements.service';
 import { AttendanceBiometricsService } from './attendance/attendance-biometrics.service';
 import { AttendanceController } from './attendance/attendance.controller';
 import { AttendanceService } from './attendance/attendance.service';
@@ -15,7 +18,9 @@ import { PayrollService } from './payroll/payroll.service';
 import { WorkforceContextService } from './workforce-context.service';
 
 @Module({
+  imports: [BillingModule],
   controllers: [
+    AnnouncementsController,
     AttendanceController,
     LeaveController,
     EmployeesController,
@@ -25,6 +30,7 @@ import { WorkforceContextService } from './workforce-context.service';
   ],
   providers: [
     WorkforceContextService,
+    AnnouncementsService,
     AttendanceBiometricsService,
     AttendanceService,
     LeaveService,

@@ -1,24 +1,86 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSession } from '@/lib/auth-client';
 import {
   formatAttendanceTime,
   getBranchAttendanceOverview,
+  getLiveLocations,
   type BranchAttendanceOverview,
+  type LiveLocationsOverview,
 } from '@/lib/attendance';
+import { getOrganizationSubscription } from '@/lib/billing';
 import { isHrRole, isOrgAdminRole } from '@/lib/org-roles';
 import { getTeamOverview, type TeamOverview } from '@/lib/team';
+
+const LiveLocationMap = dynamic(
+  () =>
+    import('@/components/attendance/live-location-map').then(
+      (module) => module.LiveLocationMap,
+    ),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-[560px] w-full rounded-2xl" />,
+  },
+);
+
+const LIVE_LOCATION_REFRESH_MS = 5 * 60 * 1000;
 
 export default function AttendancePage() {
   const router = useRouter();
   const { data: session } = useSession();
   const [team, setTeam] = useState<TeamOverview | null>(null);
-  const [overview, setOverview] = useState<BranchAttendanceOverview | null>(null);
+  const [overview, setOverview] = useState<BranchAttendanceOverview | null>(
+    null,
+  );
+  const [liveLocations, setLiveLocations] =
+    useState<LiveLocationsOverview | null>(null);
   const [branchId, setBranchId] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
+  const [liveTrackingEnabled, setLiveTrackingEnabled] = useState(false);
+  const branchIdRef = useRef(branchId);
+
+  useEffect(() => {
+    branchIdRef.current = branchId;
+  }, [branchId]);
+
+  const refreshAttendanceData = useCallback(async () => {
+    if (!team) {
+      return;
+    }
+
+    const isAdmin = isOrgAdminRole(team.currentMember?.role);
+    const selectedBranch = isAdmin
+      ? branchIdRef.current || undefined
+      : undefined;
+
+    const [nextOverview, subscription] = await Promise.all([
+      getBranchAttendanceOverview(selectedBranch),
+      getOrganizationSubscription(),
+    ]);
+
+    const hasLiveTracking = subscription.activeFeatures.includes('live_tracking');
+    setLiveTrackingEnabled(hasLiveTracking);
+
+    let nextLive: LiveLocationsOverview = {
+      updatedAt: new Date().toISOString(),
+      branchId: selectedBranch ?? null,
+      employees: [],
+    };
+
+    if (hasLiveTracking) {
+      nextLive = await getLiveLocations(selectedBranch);
+    }
+
+    setOverview(nextOverview);
+    setLiveLocations(nextLive);
+    setLastRefreshedAt(new Date().toISOString());
+    setError(null);
+  }, [team]);
 
   useEffect(() => {
     if (!session) {
@@ -42,14 +104,33 @@ export default function AttendancePage() {
           '';
         setBranchId(defaultBranch);
 
-        return getBranchAttendanceOverview(
-          isOrgAdminRole(role) ? defaultBranch || undefined : undefined,
+        const overviewBranch = isOrgAdminRole(role)
+          ? defaultBranch || undefined
+          : undefined;
+
+        return getBranchAttendanceOverview(overviewBranch).then(
+          async (nextOverview) => {
+            const subscription = await getOrganizationSubscription();
+            const hasLiveTracking =
+              subscription.activeFeatures.includes('live_tracking');
+            setLiveTrackingEnabled(hasLiveTracking);
+            setOverview(nextOverview);
+
+            if (!hasLiveTracking) {
+              setLiveLocations({
+                updatedAt: new Date().toISOString(),
+                branchId: nextOverview.branchId,
+                employees: [],
+              });
+              setLastRefreshedAt(new Date().toISOString());
+              return;
+            }
+
+            const nextLive = await getLiveLocations(overviewBranch);
+            setLiveLocations(nextLive);
+            setLastRefreshedAt(new Date().toISOString());
+          },
         );
-      })
-      .then((nextOverview) => {
-        if (nextOverview) {
-          setOverview(nextOverview);
-        }
       })
       .catch(() => router.replace('/dashboard'));
   }, [router, session]);
@@ -59,16 +140,44 @@ export default function AttendancePage() {
       return;
     }
 
-    void getBranchAttendanceOverview(branchId || undefined)
-      .then(setOverview)
-      .catch((loadError) => {
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : 'Unable to load attendance.',
-        );
+    void refreshAttendanceData().catch((loadError) => {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : 'Unable to load attendance.',
+      );
+    });
+  }, [branchId, refreshAttendanceData, team]);
+
+  useEffect(() => {
+    if (!team) {
+      return;
+    }
+
+    if (!liveTrackingEnabled) {
+      return;
+    }
+
+    const refresh = () => {
+      void refreshAttendanceData().catch(() => {
+        // Keep the previous map; refresh failures are non-fatal.
       });
-  }, [branchId, team]);
+    };
+
+    const timer = window.setInterval(refresh, LIVE_LOCATION_REFRESH_MS);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [liveTrackingEnabled, refreshAttendanceData, team]);
+
+  const branchNames = useMemo(() => {
+    const names: Record<string, string> = {};
+    for (const branch of team?.branches ?? []) {
+      names[branch._id] = branch.name;
+    }
+    return names;
+  }, [team]);
 
   if (!team || !overview) {
     return (
@@ -79,6 +188,7 @@ export default function AttendancePage() {
             <Skeleton key={index} className="h-24 w-full" />
           ))}
         </div>
+        <Skeleton className="h-[560px] w-full rounded-2xl" />
       </div>
     );
   }
@@ -92,7 +202,7 @@ export default function AttendancePage() {
           Attendance today
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Who is on duty across your branch.
+          Who is on duty across your branch, including live location.
         </p>
       </div>
 
@@ -134,17 +244,45 @@ export default function AttendancePage() {
           </p>
         </article>
         <article className="rounded-2xl border border-border bg-card p-5">
-          <p className="text-sm text-muted-foreground">Clocked out</p>
-          <p className="mt-2 text-3xl font-semibold text-muted-foreground">
-            {
-              overview.employees.filter((employee) => !employee.isClockedIn)
-                .length
-            }
+          <p className="text-sm text-muted-foreground">Live on map</p>
+          <p className="mt-2 text-3xl font-semibold text-foreground">
+            {liveLocations?.employees.length ?? 0}
           </p>
         </article>
       </section>
 
       <section className="space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">
+              Live location
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {liveTrackingEnabled
+                ? 'Map data refreshes every 5 minutes. Employee pins update when they share location from the portal (~every minute while on duty).'
+                : 'Live tracking is not on your subscription. Ask your organization admin to add it from Subscription settings.'}
+            </p>
+          </div>
+          {liveTrackingEnabled && lastRefreshedAt ? (
+            <p className="text-xs text-muted-foreground">
+              Last refreshed {formatAttendanceTime(lastRefreshedAt)}
+            </p>
+          ) : null}
+        </div>
+        {liveTrackingEnabled ? (
+          <LiveLocationMap
+            employees={liveLocations?.employees ?? []}
+            branchNames={branchNames}
+          />
+        ) : (
+          <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-6 py-10 text-center text-sm text-muted-foreground">
+            Enable the Live tracking add-on to see on-duty employees on the map.
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-foreground">Roster</h2>
         {overview.employees.length === 0 ? (
           <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
             No employees found for this branch.
@@ -164,7 +302,9 @@ export default function AttendancePage() {
                   <p className="mt-1 text-sm text-muted-foreground">
                     Last {employee.lastEvent.type.replace('_', ' ')} ·{' '}
                     {formatAttendanceTime(employee.lastEvent.recordedAt)}
-                    {employee.lastEvent.biometricVerified ? ' · Biometric verified' : ''}
+                    {employee.lastEvent.biometricVerified
+                      ? ' · Biometric verified'
+                      : ''}
                   </p>
                 ) : (
                   <p className="mt-1 text-sm text-muted-foreground">

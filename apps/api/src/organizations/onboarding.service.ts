@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AuthService } from '@thallesp/nestjs-better-auth';
+import { BillingService } from '../billing/billing.service';
 import {
   createBranchesForOrganization,
   listBranchesByOrganization,
@@ -22,6 +23,7 @@ export class OnboardingService {
   constructor(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private readonly authService: AuthService<any>,
+    private readonly billing: BillingService,
   ) {}
 
   getStatus(organizations: OrganizationRecord[]): OnboardingStatus {
@@ -111,6 +113,8 @@ export class OnboardingService {
       organization.id,
       input.branches,
     );
+
+    await this.billing.seedSubscriptionForOrganization(organization.id);
 
     return {
       organization,

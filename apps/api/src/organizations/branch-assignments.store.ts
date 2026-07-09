@@ -64,3 +64,21 @@ export async function findAssignmentByUserId(
     ) ?? null
   );
 }
+
+export async function updateBranchAssignment(input: {
+  organizationId: string;
+  userId: string;
+  branchId: string;
+}): Promise<BranchAssignment | null> {
+  const collection = await getCollection();
+  const result = await collection.findOneAndUpdate(
+    {
+      organizationId: String(input.organizationId),
+      userId: String(input.userId),
+    },
+    { $set: { branchId: String(input.branchId) } },
+    { returnDocument: 'after' },
+  );
+
+  return result ?? null;
+}

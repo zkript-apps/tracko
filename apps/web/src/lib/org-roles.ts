@@ -14,6 +14,10 @@ export function isEmployeeRole(role: string | null | undefined): boolean {
   return role === 'employee';
 }
 
+export function isWorkforceStaffRole(role: string | null | undefined): boolean {
+  return isEmployeeRole(role) || isHrRole(role);
+}
+
 export function isSuperAdminRole(role: string | null | undefined): boolean {
   return role === 'super_admin';
 }

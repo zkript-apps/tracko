@@ -95,3 +95,18 @@ export async function cancelOrgInvitation(invitationId: string) {
     body: JSON.stringify({ invitationId }),
   });
 }
+
+export async function reassignTeamMember(input: {
+  userId: string;
+  branchId: string;
+}): Promise<{
+  userId: string;
+  branchId: string;
+  branchName: string;
+  role: string;
+}> {
+  return apiFetch('/team/members/reassign', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}

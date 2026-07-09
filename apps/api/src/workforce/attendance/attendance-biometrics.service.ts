@@ -10,8 +10,10 @@ import {
   verifyAuthenticationResponse,
   verifyRegistrationResponse,
   type AuthenticationResponseJSON,
+  type AuthenticatorTransportFuture,
   type RegistrationResponseJSON,
 } from '@simplewebauthn/server';
+import { ObjectId } from 'mongodb';
 import { getMongoDb } from '../../database/mongo';
 import { WorkforceContextService } from '../workforce-context.service';
 import {
@@ -30,7 +32,33 @@ import {
   isAttendanceBiometricsRequired,
 } from './webauthn.config';
 
-type UserDoc = { _id: string; name?: string; email?: string };
+type UserDoc = { _id: string | ObjectId; name?: string; email?: string };
+
+function userIdFilter(userId: string): { _id: string | ObjectId } | { $or: Array<{ _id: string | ObjectId }> } {
+  if (ObjectId.isValid(userId) && String(new ObjectId(userId)) === userId) {
+    return { $or: [{ _id: userId }, { _id: new ObjectId(userId) }] };
+  }
+
+  return { _id: userId };
+}
+
+/**
+ * Attendance clock-in is same-device. Passing `hybrid` alongside `internal`
+ * makes Windows often open a broken phone/QR passkey flow instead of Hello.
+ */
+function transportsForLocalAuth(
+  transports?: string[],
+): AuthenticatorTransportFuture[] | undefined {
+  if (!transports?.length) {
+    return undefined;
+  }
+
+  if (transports.includes('internal')) {
+    return ['internal'];
+  }
+
+  return transports as AuthenticatorTransportFuture[];
+}
 
 @Injectable()
 export class AttendanceBiometricsService {
@@ -38,7 +66,9 @@ export class AttendanceBiometricsService {
 
   private async loadUser(userId: string): Promise<UserDoc> {
     const db = await getMongoDb();
-    const user = await db.collection<UserDoc>('user').findOne({ _id: userId });
+    const user = await db
+      .collection<UserDoc>('user')
+      .findOne(userIdFilter(userId));
 
     if (!user) {
       throw new NotFoundException('User not found.');
@@ -78,7 +108,7 @@ export class AttendanceBiometricsService {
       attestationType: 'none',
       excludeCredentials: credentials.map((credential) => ({
         id: credential.credentialId,
-        transports: credential.transports as AuthenticatorTransport[] | undefined,
+        transports: transportsForLocalAuth(credential.transports),
       })),
       authenticatorSelection: {
         residentKey: 'preferred',
@@ -170,7 +200,7 @@ export class AttendanceBiometricsService {
       userVerification: 'required',
       allowCredentials: credentials.map((credential) => ({
         id: credential.credentialId,
-        transports: credential.transports as AuthenticatorTransport[] | undefined,
+        transports: transportsForLocalAuth(credential.transports),
       })),
     });
 
@@ -220,7 +250,7 @@ export class AttendanceBiometricsService {
         id: storedCredential.credentialId,
         publicKey: Buffer.from(storedCredential.publicKey, 'base64url'),
         counter: storedCredential.counter,
-        transports: storedCredential.transports as AuthenticatorTransport[] | undefined,
+        transports: storedCredential.transports as AuthenticatorTransportFuture[] | undefined,
       },
     });
 

@@ -16,6 +16,7 @@ import {
   rejectLeaveRequest,
   type LeaveRequest,
 } from '@/lib/leave';
+import { getOrganizationSubscription } from '@/lib/billing';
 import { getTeamOverview, type TeamOverview } from '@/lib/team';
 
 export default function LeavePage() {
@@ -48,7 +49,14 @@ export default function LeavePage() {
         }
 
         setTeam(nextTeam);
-        return loadRequests('pending');
+        return getOrganizationSubscription().then((subscription) => {
+          if (!subscription.activeFeatures.includes('leave')) {
+            router.replace('/dashboard/settings/subscription');
+            return;
+          }
+
+          return loadRequests('pending');
+        });
       })
       .catch(() => router.replace('/dashboard'));
   }, [router, session]);

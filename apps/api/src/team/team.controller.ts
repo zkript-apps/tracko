@@ -22,6 +22,11 @@ class InviteEmployeeDto {
   branchId?: string;
 }
 
+class ReassignMemberDto {
+  userId!: string;
+  branchId!: string;
+}
+
 @Controller()
 export class TeamController {
   constructor(private readonly team: TeamService) {}
@@ -71,6 +76,22 @@ export class TeamController {
     return this.team.inviteEmployee(request, {
       email: body.email.trim(),
       branchId: body.branchId?.trim(),
+    });
+  }
+
+  @Post('team/members/reassign')
+  reassignMember(@Req() request: Request, @Body() body: ReassignMemberDto) {
+    if (!body.userId?.trim()) {
+      throw new BadRequestException('Member is required.');
+    }
+
+    if (!body.branchId?.trim()) {
+      throw new BadRequestException('Branch is required.');
+    }
+
+    return this.team.reassignMember(request, {
+      userId: body.userId.trim(),
+      branchId: body.branchId.trim(),
     });
   }
 }

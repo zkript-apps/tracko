@@ -56,5 +56,22 @@ export async function authenticateWithBiometric(): Promise<AuthenticationRespons
     { method: 'POST', body: JSON.stringify({}) },
   );
 
-  return startAuthentication({ optionsJSON: options });
+  try {
+    return await startAuthentication({ optionsJSON: options });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message.toLowerCase() : '';
+
+    if (
+      message.includes('not allowed') ||
+      message.includes('abort') ||
+      message.includes('cancel')
+    ) {
+      throw new Error('Biometric verification was canceled.');
+    }
+
+    throw new Error(
+      'Unable to verify this device passkey. Try clock-in again, or remove the passkey in Windows Settings > Accounts > Passkeys and set it up again here.',
+    );
+  }
 }

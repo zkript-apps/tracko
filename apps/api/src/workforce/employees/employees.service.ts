@@ -11,6 +11,7 @@ import {
   listAssignmentsByOrganization,
 } from '../../organizations/branch-assignments.store';
 import { WorkforceContextService } from '../workforce-context.service';
+import { BillingService } from '../../billing/billing.service';
 import {
   createEmployeeProfile,
   EMPLOYMENT_TYPES,
@@ -75,7 +76,10 @@ function serializeLeaveHistoryItem(request: LeaveRequestRecord) {
 
 @Injectable()
 export class EmployeesService {
-  constructor(private readonly workforce: WorkforceContextService) {}
+  constructor(
+    private readonly workforce: WorkforceContextService,
+    private readonly billing: BillingService,
+  ) {}
 
   private async requireManager(request: Request) {
     const context = await this.workforce.getMemberContext(request);
@@ -147,6 +151,7 @@ export class EmployeesService {
     periodYear: number;
     updatedBy?: string;
     userMap: Map<string, { name?: string; email?: string }>;
+    leaveEnabled: boolean;
   }) {
     const profile = await this.ensureEmployeeProfile({
       organizationId: input.organizationId,
@@ -156,13 +161,15 @@ export class EmployeesService {
       updatedBy: input.updatedBy,
     });
 
-    const balances = await ensureBalancesForUser({
-      organizationId: input.organizationId,
-      userId: input.userId,
-      memberId: input.memberId,
-      branchId: input.branchId,
-      periodYear: input.periodYear,
-    });
+    const balances = input.leaveEnabled
+      ? await ensureBalancesForUser({
+          organizationId: input.organizationId,
+          userId: input.userId,
+          memberId: input.memberId,
+          branchId: input.branchId,
+          periodYear: input.periodYear,
+        })
+      : [];
 
     const user = input.userMap.get(String(input.userId));
 
@@ -194,6 +201,10 @@ export class EmployeesService {
     const userMap = await this.loadUsers(
       employeeAssignments.map((assignment) => assignment.userId),
     );
+    const leaveEnabled = await this.billing.isFeatureEnabled(
+      context.organizationId,
+      'leave',
+    );
 
     const employees = await Promise.all(
       employeeAssignments.map((assignment) =>
@@ -205,6 +216,7 @@ export class EmployeesService {
           periodYear: year,
           updatedBy: context.userId,
           userMap,
+          leaveEnabled,
         }),
       ),
     );
@@ -227,10 +239,13 @@ export class EmployeesService {
     this.assertEmployeeAccess(context, assignment.branchId);
 
     const userMap = await this.loadUsers([userId]);
-    const leaveHistory = await listLeaveRequestsForUser(
+    const leaveEnabled = await this.billing.isFeatureEnabled(
       context.organizationId,
-      userId,
+      'leave',
     );
+    const leaveHistory = leaveEnabled
+      ? await listLeaveRequestsForUser(context.organizationId, userId)
+      : [];
 
     return {
       ...(await this.buildEmployeeRecord({
@@ -241,6 +256,7 @@ export class EmployeesService {
         periodYear: year,
         updatedBy: context.userId,
         userMap,
+        leaveEnabled,
       })),
       periodYear: year,
       leaveHistory: leaveHistory.map(serializeLeaveHistoryItem),
@@ -438,6 +454,11 @@ export class EmployeesService {
     },
   ) {
     const context = await this.requireManager(request);
+    await this.billing.requireFeature(
+      context.organizationId,
+      'leave',
+      'Leave requests and approvals',
+    );
     const year = input.periodYear ?? new Date().getFullYear();
     const assignment = await findAssignmentByUserId(
       context.organizationId,
@@ -483,6 +504,11 @@ export class EmployeesService {
 
   async getMyLeaveBalances(request: Request, periodYear?: number) {
     const context = await this.workforce.requireEmployee(request);
+    await this.billing.requireFeature(
+      context.organizationId,
+      'leave',
+      'Leave requests and approvals',
+    );
     const year = periodYear ?? new Date().getFullYear();
 
     await this.ensureEmployeeProfile({

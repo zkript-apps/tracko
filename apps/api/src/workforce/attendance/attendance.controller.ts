@@ -10,7 +10,14 @@ import { AttendanceService } from './attendance.service';
 class ClockDto {
   latitude?: number;
   longitude?: number;
+  accuracy?: number;
   biometricResponse?: AuthenticationResponseJSON;
+}
+
+class LocationDto {
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
 }
 
 class RegisterBiometricDto {
@@ -60,6 +67,19 @@ export class AttendanceController {
   @Post('me/clock-out')
   clockOut(@Req() request: Request, @Body() body: ClockDto) {
     return this.attendance.clockOut(request, body);
+  }
+
+  @Post('me/location')
+  updateMyLocation(@Req() request: Request, @Body() body: LocationDto) {
+    return this.attendance.updateMyLocation(request, body);
+  }
+
+  @Get('live-locations')
+  liveLocations(
+    @Req() request: Request,
+    @Query('branchId') branchId?: string,
+  ) {
+    return this.attendance.getLiveLocations(request, branchId);
   }
 
   @Get('branch/overview')
