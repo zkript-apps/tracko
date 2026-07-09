@@ -1,6 +1,7 @@
 export function getWebAuthnConfig() {
   const origin =
     process.env.WEBAUTHN_ORIGIN ??
+    process.env.WEB_URL ??
     process.env.TRUSTED_ORIGINS?.split(',')[0]?.trim() ??
     'http://localhost:3000';
   const rpID =

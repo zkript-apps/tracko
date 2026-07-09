@@ -1,4 +1,46 @@
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+function usesApiProxy() {
+  return process.env.NEXT_PUBLIC_USE_API_PROXY === 'true';
+}
+
+function resolveWebOrigin() {
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+
+  if (process.env.NEXT_PUBLIC_WEB_URL) {
+    return process.env.NEXT_PUBLIC_WEB_URL.replace(/\/$/, '');
+  }
+
+  if (process.env.VERCEL_URL) {
+    const host = process.env.VERCEL_URL.replace(/^https?:\/\//, '');
+    return `https://${host}`;
+  }
+
+  return 'http://localhost:3000';
+}
+
+function resolveApiUrl() {
+  if (usesApiProxy()) {
+    return '/backend';
+  }
+
+  return process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+}
+
+const apiUrl = resolveApiUrl();
+
+export function resolveAuthClientConfig() {
+  if (usesApiProxy()) {
+    return {
+      baseURL: resolveWebOrigin(),
+      basePath: '/backend/api/auth',
+    };
+  }
+
+  return {
+    baseURL: apiUrl,
+  };
+}
 
 export async function apiFetch<T>(
   path: string,
