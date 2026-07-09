@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   CalendarDays,
   ClipboardList,
   Clock,
+  CreditCard,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -26,6 +27,10 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { signOut } from '@/lib/auth-client';
+import {
+  getOrganizationSubscription,
+  type BillableFeatureId,
+} from '@/lib/billing';
 import { formatOrgRole } from '@/lib/org-roles';
 import { cn } from '@/lib/utils';
 import type { TeamOverview } from '@/lib/team';
@@ -45,7 +50,10 @@ type NavItem = {
   exact?: boolean;
 };
 
-function buildNavItems(team: TeamOverview): NavItem[] {
+function buildNavItems(
+  team: TeamOverview,
+  activeFeatures: BillableFeatureId[] = [],
+): NavItem[] {
   const items: NavItem[] = [
     {
       href: '/dashboard',
@@ -72,16 +80,25 @@ function buildNavItems(team: TeamOverview): NavItem[] {
         label: 'DTR',
         icon: ClipboardList,
       },
-      {
+    );
+
+    if (activeFeatures.includes('leave')) {
+      items.push({
         href: '/dashboard/leave',
         label: 'Leave',
         icon: CalendarDays,
-      },
-      {
+      });
+    }
+
+    if (activeFeatures.includes('payroll')) {
+      items.push({
         href: '/dashboard/payroll',
         label: 'Payroll',
         icon: PhilippinePeso,
-      },
+      });
+    }
+
+    items.push(
       {
         href: '/dashboard/calendar',
         label: 'Calendar',
@@ -104,11 +121,18 @@ function buildNavItems(team: TeamOverview): NavItem[] {
   }
 
   if (team.currentMember?.canManageTeam) {
-    items.push({
-      href: '/dashboard/team',
-      label: 'Team & HR',
-      icon: UserCog,
-    });
+    items.push(
+      {
+        href: '/dashboard/team',
+        label: 'Team & HR',
+        icon: UserCog,
+      },
+      {
+        href: '/dashboard/settings/subscription',
+        label: 'Subscription',
+        icon: CreditCard,
+      },
+    );
   }
 
   return items;
@@ -164,6 +188,7 @@ function SidebarContent({
   userName,
   userEmail,
   pathname,
+  activeFeatures,
   onNavigate,
   onSignOut,
 }: {
@@ -172,10 +197,11 @@ function SidebarContent({
   userName: string;
   userEmail: string;
   pathname: string;
+  activeFeatures: BillableFeatureId[];
   onNavigate?: () => void;
   onSignOut: () => void;
 }) {
-  const items = buildNavItems(team);
+  const items = buildNavItems(team, activeFeatures);
   const role = team.currentMember?.role ?? 'member';
   const branch = team.members.find(
     (member) => member.userId === userId,
@@ -237,6 +263,21 @@ export function DashboardShell({
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [activeFeatures, setActiveFeatures] = useState<BillableFeatureId[]>([]);
+
+  useEffect(() => {
+    if (!team.currentMember?.canManageTeam && team.currentMember?.role !== 'hr') {
+      return;
+    }
+
+    void getOrganizationSubscription()
+      .then((subscription) => {
+        setActiveFeatures(subscription.activeFeatures);
+      })
+      .catch(() => {
+        setActiveFeatures([]);
+      });
+  }, [team]);
 
   async function handleSignOut() {
     await signOut();
@@ -245,7 +286,7 @@ export function DashboardShell({
   }
 
   const pageTitle =
-    buildNavItems(team).find((item) =>
+    buildNavItems(team, activeFeatures).find((item) =>
       isActivePath(pathname, item.href, item.exact),
     )?.label ?? 'Dashboard';
 
@@ -258,6 +299,7 @@ export function DashboardShell({
           userName={userName}
           userEmail={userEmail}
           pathname={pathname}
+          activeFeatures={activeFeatures}
           onSignOut={handleSignOut}
         />
       </aside>
@@ -281,6 +323,7 @@ export function DashboardShell({
                 userName={userName}
                 userEmail={userEmail}
                 pathname={pathname}
+                activeFeatures={activeFeatures}
                 onNavigate={() => setMobileOpen(false)}
                 onSignOut={handleSignOut}
               />

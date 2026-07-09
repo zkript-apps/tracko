@@ -12,6 +12,7 @@ import {
   type BranchAssignment,
 } from '../../organizations/branch-assignments.store';
 import { WorkforceContextService } from '../workforce-context.service';
+import { BillingService } from '../../billing/billing.service';
 import { AttendanceBiometricsService } from './attendance-biometrics.service';
 import { listBiometricCredentialsForUser } from './biometric-credentials.store';
 import {
@@ -86,6 +87,7 @@ export class AttendanceService {
   constructor(
     private readonly workforce: WorkforceContextService,
     private readonly biometrics: AttendanceBiometricsService,
+    private readonly billing: BillingService,
   ) {}
 
   async getMyStatus(request: Request) {
@@ -102,10 +104,21 @@ export class AttendanceService {
       50,
     )).filter((event) => event.recordedAt >= todayStart);
 
+    const liveTrackingEnabled = await this.billing.isFeatureEnabled(
+      context.organizationId,
+      'live_tracking',
+    );
+    const leaveEnabled = await this.billing.isFeatureEnabled(
+      context.organizationId,
+      'leave',
+    );
+
     return {
       isClockedIn: isClockedIn(latest),
       lastEvent: latest ? serializeEvent(latest) : null,
       todayEvents: todayEvents.map(serializeEvent),
+      liveTrackingEnabled,
+      leaveEnabled,
     };
   }
 
@@ -146,18 +159,25 @@ export class AttendanceService {
       credentialId: verification.credentialId,
     });
 
-    await upsertLiveLocation({
-      organizationId: context.organizationId,
-      userId: context.userId,
-      branchId: context.branchId!,
-      latitude: coords.latitude,
-      longitude: coords.longitude,
-      accuracy:
-        typeof input.accuracy === 'number' && Number.isFinite(input.accuracy)
-          ? input.accuracy
-          : undefined,
-      recordedAt: event.recordedAt,
-    });
+    if (
+      await this.billing.isFeatureEnabled(
+        context.organizationId,
+        'live_tracking',
+      )
+    ) {
+      await upsertLiveLocation({
+        organizationId: context.organizationId,
+        userId: context.userId,
+        branchId: context.branchId!,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        accuracy:
+          typeof input.accuracy === 'number' && Number.isFinite(input.accuracy)
+            ? input.accuracy
+            : undefined,
+        recordedAt: event.recordedAt,
+      });
+    }
 
     return serializeEvent(event);
   }
@@ -212,6 +232,11 @@ export class AttendanceService {
     },
   ) {
     const context = await this.workforce.requireEmployee(request);
+    await this.billing.requireFeature(
+      context.organizationId,
+      'live_tracking',
+      'Live tracking',
+    );
     const coords = requireCoordinates(input);
     const latest = await findLatestAttendanceEvent(
       context.organizationId,
@@ -252,6 +277,12 @@ export class AttendanceService {
     if (!context.canViewBranchAttendance) {
       throw new ForbiddenException('HR or admin access required.');
     }
+
+    await this.billing.requireFeature(
+      context.organizationId,
+      'live_tracking',
+      'Live tracking',
+    );
 
     const targetBranchId =
       branchId ??

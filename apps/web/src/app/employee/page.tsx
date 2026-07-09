@@ -200,16 +200,20 @@ export default function EmployeePage() {
   }, [leaveType, selectableLeaveTypes]);
 
   const loadWorkforceData = useCallback(async () => {
-    const [status, requests, balances, dtr, biometrics, support] =
-      await Promise.all([
-      getMyAttendanceStatus(),
-      getMyLeaveRequests(),
-      getMyLeaveBalances(),
+    const status = await getMyAttendanceStatus();
+    setAttendance(status);
+
+    const [requests, balances, dtr, biometrics, support] = await Promise.all([
+      status.leaveEnabled
+        ? getMyLeaveRequests()
+        : Promise.resolve([] as LeaveRequest[]),
+      status.leaveEnabled
+        ? getMyLeaveBalances()
+        : Promise.resolve({ leaveBalances: [] as LeaveBalance[] }),
       getMyDtrRecords(dtrRange),
       getBiometricStatus(),
       getBiometricSupport(),
     ]);
-    setAttendance(status);
     setLeaveRequests(requests);
     setLeaveBalances(balances.leaveBalances);
     setDtrRecords(dtr.records);
@@ -222,7 +226,7 @@ export default function EmployeePage() {
       return;
     }
 
-    if (attendance.isClockedIn) {
+    if (attendance.isClockedIn && attendance.liveTrackingEnabled) {
       startLocationSharing();
       return;
     }
@@ -488,7 +492,7 @@ export default function EmployeePage() {
               </p>
               <p className="mt-2 text-sm text-slate-500">
                 Location is required to clock in or out.
-                {attendance.isClockedIn
+                {attendance.isClockedIn && attendance.liveTrackingEnabled
                   ? locationSharing
                     ? ' Location sharing is on while you are on duty.'
                     : ' Keep this page open to share your live location with HR.'
@@ -646,8 +650,10 @@ export default function EmployeePage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-          <h2 className="text-lg font-semibold text-white">Leave balances</h2>
+        {attendance?.leaveEnabled ? (
+          <>
+            <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+              <h2 className="text-lg font-semibold text-white">Leave balances</h2>
           <p className="mt-2 text-sm text-slate-400">
             Available days for this year. Unpaid leave does not use a balance.
           </p>
@@ -797,6 +803,8 @@ export default function EmployeePage() {
             )}
           </div>
         </section>
+          </>
+        ) : null}
       </main>
     </div>
   );

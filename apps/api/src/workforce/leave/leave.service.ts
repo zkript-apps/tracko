@@ -18,6 +18,7 @@ import {
   leavePeriodYear,
 } from '../employees/leave-days.util';
 import { WorkforceContextService } from '../workforce-context.service';
+import { BillingService } from '../../billing/billing.service';
 import {
   createLeaveRequest,
   findLeaveRequestById,
@@ -57,7 +58,10 @@ function serializeLeaveRequest(
 
 @Injectable()
 export class LeaveService {
-  constructor(private readonly workforce: WorkforceContextService) {}
+  constructor(
+    private readonly workforce: WorkforceContextService,
+    private readonly billing: BillingService,
+  ) {}
 
   private async loadUsers(userIds: string[]) {
     if (userIds.length === 0) {
@@ -83,6 +87,11 @@ export class LeaveService {
     },
   ) {
     const context = await this.workforce.requireEmployee(request);
+    await this.billing.requireFeature(
+      context.organizationId,
+      'leave',
+      'Leave requests and approvals',
+    );
 
     if (!LEAVE_TYPES.includes(input.leaveType)) {
       throw new BadRequestException('Invalid leave type.');
@@ -163,6 +172,11 @@ export class LeaveService {
 
   async listMyRequests(request: Request) {
     const context = await this.workforce.requireEmployee(request);
+    await this.billing.requireFeature(
+      context.organizationId,
+      'leave',
+      'Leave requests and approvals',
+    );
     const requests = await listLeaveRequestsForUser(
       context.organizationId,
       context.userId,
@@ -173,6 +187,11 @@ export class LeaveService {
 
   async listManagedRequests(request: Request, status?: string) {
     const context = await this.workforce.requireLeaveManager(request);
+    await this.billing.requireFeature(
+      context.organizationId,
+      'leave',
+      'Leave requests and approvals',
+    );
     const branchId = context.isHr ? context.branchId ?? undefined : undefined;
 
     const requests = await listLeaveRequestsForOrganization({
@@ -204,6 +223,11 @@ export class LeaveService {
     reviewNote?: string,
   ) {
     const context = await this.workforce.requireLeaveManager(request);
+    await this.billing.requireFeature(
+      context.organizationId,
+      'leave',
+      'Leave requests and approvals',
+    );
     const leaveRequest = await findLeaveRequestById(id);
 
     if (!leaveRequest) {
@@ -264,6 +288,11 @@ export class LeaveService {
 
   async cancelMyRequest(request: Request, id: string) {
     const context = await this.workforce.requireEmployee(request);
+    await this.billing.requireFeature(
+      context.organizationId,
+      'leave',
+      'Leave requests and approvals',
+    );
     const leaveRequest = await findLeaveRequestById(id);
 
     if (!leaveRequest || leaveRequest.userId !== context.userId) {

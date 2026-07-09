@@ -16,6 +16,8 @@ export type AttendanceStatus = {
   isClockedIn: boolean;
   lastEvent: AttendanceEvent | null;
   todayEvents: AttendanceEvent[];
+  liveTrackingEnabled: boolean;
+  leaveEnabled: boolean;
 };
 
 export type BranchAttendanceOverview = {

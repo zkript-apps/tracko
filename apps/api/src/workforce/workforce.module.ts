@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { BillingModule } from '../billing/billing.module';
 import { AttendanceBiometricsService } from './attendance/attendance-biometrics.service';
 import { AttendanceController } from './attendance/attendance.controller';
 import { AttendanceService } from './attendance/attendance.service';
@@ -15,6 +16,7 @@ import { PayrollService } from './payroll/payroll.service';
 import { WorkforceContextService } from './workforce-context.service';
 
 @Module({
+  imports: [BillingModule],
   controllers: [
     AttendanceController,
     LeaveController,

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AdminInvitationsModule } from './admin-invitations/admin-invitations.module';
+import { BillingModule } from './billing/billing.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -19,6 +20,7 @@ import { WorkforceModule } from './workforce/workforce.module';
     }),
     AuthModule,
     EmailModule,
+    BillingModule,
     AdminInvitationsModule,
     OrganizationsModule,
     PlatformModule,

@@ -12,6 +12,7 @@ import {
   type BranchAttendanceOverview,
   type LiveLocationsOverview,
 } from '@/lib/attendance';
+import { getOrganizationSubscription } from '@/lib/billing';
 import { isHrRole, isOrgAdminRole } from '@/lib/org-roles';
 import { getTeamOverview, type TeamOverview } from '@/lib/team';
 
@@ -40,6 +41,7 @@ export default function AttendancePage() {
   const [branchId, setBranchId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
+  const [liveTrackingEnabled, setLiveTrackingEnabled] = useState(false);
   const branchIdRef = useRef(branchId);
 
   useEffect(() => {
@@ -56,10 +58,23 @@ export default function AttendancePage() {
       ? branchIdRef.current || undefined
       : undefined;
 
-    const [nextOverview, nextLive] = await Promise.all([
+    const [nextOverview, subscription] = await Promise.all([
       getBranchAttendanceOverview(selectedBranch),
-      getLiveLocations(selectedBranch),
+      getOrganizationSubscription(),
     ]);
+
+    const hasLiveTracking = subscription.activeFeatures.includes('live_tracking');
+    setLiveTrackingEnabled(hasLiveTracking);
+
+    let nextLive: LiveLocationsOverview = {
+      updatedAt: new Date().toISOString(),
+      branchId: selectedBranch ?? null,
+      employees: [],
+    };
+
+    if (hasLiveTracking) {
+      nextLive = await getLiveLocations(selectedBranch);
+    }
 
     setOverview(nextOverview);
     setLiveLocations(nextLive);
@@ -93,20 +108,29 @@ export default function AttendancePage() {
           ? defaultBranch || undefined
           : undefined;
 
-        return Promise.all([
-          getBranchAttendanceOverview(overviewBranch),
-          getLiveLocations(overviewBranch),
-        ]);
-      })
-      .then((result) => {
-        if (!result) {
-          return;
-        }
+        return getBranchAttendanceOverview(overviewBranch).then(
+          async (nextOverview) => {
+            const subscription = await getOrganizationSubscription();
+            const hasLiveTracking =
+              subscription.activeFeatures.includes('live_tracking');
+            setLiveTrackingEnabled(hasLiveTracking);
+            setOverview(nextOverview);
 
-        const [nextOverview, nextLive] = result;
-        setOverview(nextOverview);
-        setLiveLocations(nextLive);
-        setLastRefreshedAt(new Date().toISOString());
+            if (!hasLiveTracking) {
+              setLiveLocations({
+                updatedAt: new Date().toISOString(),
+                branchId: nextOverview.branchId,
+                employees: [],
+              });
+              setLastRefreshedAt(new Date().toISOString());
+              return;
+            }
+
+            const nextLive = await getLiveLocations(overviewBranch);
+            setLiveLocations(nextLive);
+            setLastRefreshedAt(new Date().toISOString());
+          },
+        );
       })
       .catch(() => router.replace('/dashboard'));
   }, [router, session]);
@@ -130,6 +154,10 @@ export default function AttendancePage() {
       return;
     }
 
+    if (!liveTrackingEnabled) {
+      return;
+    }
+
     const refresh = () => {
       void refreshAttendanceData().catch(() => {
         // Keep the previous map; refresh failures are non-fatal.
@@ -150,7 +178,7 @@ export default function AttendancePage() {
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [refreshAttendanceData, team]);
+  }, [liveTrackingEnabled, refreshAttendanceData, team]);
 
   const branchNames = useMemo(() => {
     const names: Record<string, string> = {};
@@ -239,20 +267,27 @@ export default function AttendancePage() {
               Live location
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Map data refreshes every 5 minutes. Employee pins update when they
-              share location from the portal (~every minute while on duty).
+              {liveTrackingEnabled
+                ? 'Map data refreshes every 5 minutes. Employee pins update when they share location from the portal (~every minute while on duty).'
+                : 'Live tracking is not on your subscription. Ask your organization admin to add it from Subscription settings.'}
             </p>
           </div>
-          {lastRefreshedAt ? (
+          {liveTrackingEnabled && lastRefreshedAt ? (
             <p className="text-xs text-muted-foreground">
               Last refreshed {formatAttendanceTime(lastRefreshedAt)}
             </p>
           ) : null}
         </div>
-        <LiveLocationMap
-          employees={liveLocations?.employees ?? []}
-          branchNames={branchNames}
-        />
+        {liveTrackingEnabled ? (
+          <LiveLocationMap
+            employees={liveLocations?.employees ?? []}
+            branchNames={branchNames}
+          />
+        ) : (
+          <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-6 py-10 text-center text-sm text-muted-foreground">
+            Enable the Live tracking add-on to see on-duty employees on the map.
+          </div>
+        )}
       </section>
 
       <section className="space-y-3">

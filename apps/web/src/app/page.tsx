@@ -1,4 +1,10 @@
 import Link from 'next/link';
+import { SubscriptionContactForm } from '@/components/pricing/subscription-contact-form';
+import {
+  formatPhp,
+  getFeatureCatalogForTier,
+  ORGANIZATION_SCALE_TIERS,
+} from '@/lib/billing';
 
 const features = [
   'Time in / time out with location context',
@@ -8,12 +14,6 @@ const features = [
   'Payroll computed from attendance data',
   'Employee records and document storage',
   'Shift reminders and missed check-in alerts',
-];
-
-const tiers = [
-  { name: 'Small', employees: 'Up to 20', note: 'Entry-level tier' },
-  { name: 'Medium', employees: '21–100', note: 'Standard tier' },
-  { name: 'Enterprise', employees: '100+', note: 'Custom pricing & support' },
 ];
 
 export default function HomePage() {
@@ -101,24 +101,69 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section id="pricing" className="mx-auto max-w-6xl px-6 py-16">
-          <h2 className="mb-3 text-2xl font-semibold text-white">Subscription tiers</h2>
-          <p className="mb-8 max-w-2xl text-slate-400">
-            After payment, we send an invitation link to create your admin account
-            and set up your organization.
-          </p>
-          <div className="grid gap-4 md:grid-cols-3">
-            {tiers.map((tier) => (
-              <article
-                key={tier.name}
-                className="rounded-xl border border-slate-800 bg-slate-900 p-6"
-              >
-                <h3 className="text-lg font-medium text-white">{tier.name}</h3>
-                <p className="mt-2 text-emerald-400">{tier.employees} employees</p>
-                <p className="mt-3 text-sm text-slate-400">{tier.note}</p>
-              </article>
-            ))}
+        <section id="pricing" className="mx-auto max-w-6xl space-y-8 px-6 py-16">
+          <div>
+            <h2 className="mb-3 text-2xl font-semibold text-white">
+              Subscription plans
+            </h2>
+            <p className="max-w-2xl text-slate-400">
+              Start with the base plan, then add modules you need. Pricing scales
+              with your organization size. After we receive your request, we&apos;ll
+              contact you and send an invitation to set up your organization.
+            </p>
           </div>
+
+          <div className="overflow-x-auto rounded-xl border border-slate-800">
+            <table className="min-w-full text-left text-sm">
+              <thead className="bg-slate-900 text-slate-400">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Feature</th>
+                  {ORGANIZATION_SCALE_TIERS.map((tier) => (
+                    <th key={tier.id} className="px-4 py-3 font-medium">
+                      <span className="block text-white">{tier.label}</span>
+                      <span className="text-xs font-normal">
+                        {tier.employeeRange}
+                      </span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800 bg-slate-950/50">
+                {getFeatureCatalogForTier('small').map((feature) => (
+                  <tr key={feature.id}>
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-white">{feature.name}</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {feature.description}
+                      </p>
+                    </td>
+                    {ORGANIZATION_SCALE_TIERS.map((tier) => {
+                      const tierFeature = getFeatureCatalogForTier(tier.id).find(
+                        (entry) => entry.id === feature.id,
+                      );
+
+                      return (
+                        <td key={tier.id} className="px-4 py-3 text-emerald-400">
+                          {formatPhp(tierFeature?.pricePhp ?? 0)}/mo
+                          {feature.optional ? (
+                            <span className="mt-1 block text-xs text-slate-500">
+                              Optional
+                            </span>
+                          ) : (
+                            <span className="mt-1 block text-xs text-emerald-500/80">
+                              Required
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <SubscriptionContactForm />
         </section>
       </main>
     </div>
