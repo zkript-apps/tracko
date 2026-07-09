@@ -28,11 +28,43 @@ export type LeaveRequest = {
 
 export type LeaveBalance = {
   leaveType: string;
+  periodKey: string;
   periodYear: number;
+  periodStart: string | null;
+  periodEnd: string | null;
+  companyEntitledDays: number;
+  carriedOverDays: number;
+  silFloorDays: number;
   entitledDays: number;
   usedDays: number;
   pendingDays: number;
   availableDays: number;
+  periodClosed?: boolean;
+  forfeitedDays?: number;
+  convertedDays?: number;
+  conversionTarget?: string | null;
+};
+
+export type LeaveEligibility = {
+  eligible: boolean;
+  tenureMonthsRequired: number;
+  tenureMonthsServed: number;
+  hireDate: string | null;
+};
+
+export type LeaveBalanceSummary = {
+  periodYear: number;
+  periodKey: string;
+  periodStart?: string;
+  periodEnd?: string;
+  leaveBalances: LeaveBalance[];
+  silSafeguard?: {
+    enabled: boolean;
+    minDays: number;
+    tenureMonths: number;
+    cashOutUnused: boolean;
+  };
+  leaveEligibility?: LeaveEligibility;
 };
 
 export async function getMyLeaveRequests(): Promise<LeaveRequest[]> {
@@ -41,7 +73,7 @@ export async function getMyLeaveRequests(): Promise<LeaveRequest[]> {
 
 export async function getMyLeaveBalances(
   periodYear?: number,
-): Promise<{ periodYear: number; leaveBalances: LeaveBalance[] }> {
+): Promise<LeaveBalanceSummary> {
   const query =
     periodYear !== undefined
       ? `?periodYear=${encodeURIComponent(String(periodYear))}`
@@ -116,10 +148,17 @@ export function getLeaveStatusClassName(status: string): string {
   }
 }
 
-export function getSelectableLeaveTypes(balances: LeaveBalance[]) {
+export function getSelectableLeaveTypes(
+  balances: LeaveBalance[],
+  options?: { paidLeaveEligible?: boolean },
+) {
   return LEAVE_TYPES.filter((type) => {
     if (type.value === 'unpaid') {
       return true;
+    }
+
+    if (options?.paidLeaveEligible === false) {
+      return false;
     }
 
     const isBalanceType = BALANCE_LEAVE_TYPES.includes(

@@ -76,6 +76,7 @@ import {
   type DailyTimeRecord,
 } from '@/lib/dtr';
 import { formatLeaveType, BALANCE_LEAVE_TYPES, formatLeaveStatus, getLeaveStatusClassName } from '@/lib/leave';
+import { parseIntegerInput, selectZeroNumberInputOnFocus } from '@/lib/number-input';
 import { isHrRole } from '@/lib/org-roles';
 import { getTeamOverview, type TeamOverview } from '@/lib/team';
 
@@ -190,7 +191,8 @@ export default function EmployeeDetailPage() {
     };
 
     for (const balance of record.leaveBalances) {
-      nextBalances[balance.leaveType] = balance.entitledDays;
+      nextBalances[balance.leaveType] =
+        balance.companyEntitledDays ?? balance.entitledDays;
     }
 
     setBalanceInputs(nextBalances);
@@ -819,88 +821,137 @@ export default function EmployeeDetailPage() {
             <div>
               <SectionTitle icon={CalendarDays}>Leave balances</SectionTitle>
               <p className="mt-2 text-sm text-muted-foreground">
-                Set how many days this employee can take per leave type.
+                Set company-assigned days per leave type. Effective totals include
+                carry-over and the SIL safeguard on vacation leave.
               </p>
             </div>
-            <label className="block space-y-2">
-              <Label htmlFor="period-year">Year</Label>
-              <Input
-                id="period-year"
-                type="number"
-                min={2000}
-                max={2100}
-                value={periodYear}
-                onChange={(event) => setPeriodYear(Number(event.target.value))}
-                className="w-28"
-              />
-            </label>
+            {employee.leaveEligibility?.eligible !== false ? (
+              <label className="block space-y-2">
+                <Label htmlFor="period-year">Year</Label>
+                <Input
+                  id="period-year"
+                  type="number"
+                  min={2000}
+                  max={2100}
+                  value={periodYear}
+                  onChange={(event) =>
+                    setPeriodYear(
+                      parseIntegerInput(event.target.value, {
+                        min: 2000,
+                        max: 2100,
+                      }),
+                    )
+                  }
+                  onFocus={(event) =>
+                    selectZeroNumberInputOnFocus(event, periodYear)
+                  }
+                  className="w-28"
+                />
+              </label>
+            ) : null}
           </div>
 
-          <div className="mt-6 grid gap-4 sm:grid-cols-3">
-            {BALANCE_TYPES.map((leaveType) => {
-              const balance = employee.leaveBalances.find(
-                (item) => item.leaveType === leaveType,
-              );
-
-              return (
-                <article
-                  key={leaveType}
-                  className="rounded-xl border border-border bg-muted/30 p-4"
-                >
-                  <p className="text-sm text-slate-400">
-                    {formatLeaveType(leaveType)}
-                  </p>
-                  <p className="mt-2 text-2xl font-semibold text-white">
-                    {balance?.availableDays ?? 0}
-                    <span className="text-sm font-normal text-slate-500">
-                      {' '}
-                      / {balance?.entitledDays ?? 0} available
-                    </span>
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Used {balance?.usedDays ?? 0} · Pending{' '}
-                    {balance?.pendingDays ?? 0}
-                  </p>
-                </article>
-              );
-            })}
-          </div>
-
-          <form className="mt-6 space-y-4" onSubmit={handleBalancesSubmit}>
-            <div className="grid gap-4 md:grid-cols-3">
-              {BALANCE_TYPES.map((leaveType) => (
-                <label key={leaveType} className="block space-y-2">
-                  <span className="text-sm text-slate-300">
-                    {formatLeaveType(leaveType)} days
-                  </span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={365}
-                    required
-                    value={balanceInputs[leaveType] ?? 0}
-                    onChange={(event) =>
-                      setBalanceInputs((current) => ({
-                        ...current,
-                        [leaveType]: Number(event.target.value),
-                      }))
-                    }
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
-                  />
-                </label>
-              ))}
+          {employee.leaveEligibility?.eligible === false ? (
+            <div className="mt-6 rounded-xl border border-dashed border-border bg-muted/20 px-4 py-6 text-center">
+              <p className="font-medium text-foreground">
+                Employee ineligible for leave
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                This employee has completed{' '}
+                {employee.leaveEligibility.tenureMonthsServed} of{' '}
+                {employee.leaveEligibility.tenureMonthsRequired} required
+                month(s) of service
+                {employee.leaveEligibility.hireDate
+                  ? ` since ${formatDateLabel(employee.leaveEligibility.hireDate)}`
+                  : ''}
+                .
+              </p>
             </div>
+          ) : (
+            <>
+              <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                {BALANCE_TYPES.map((leaveType) => {
+                  const balance = employee.leaveBalances.find(
+                    (item) => item.leaveType === leaveType,
+                  );
 
-            <LoadingButton
-              type="submit"
-              loading={balanceLoading}
-              loadingText="Saving…"
-              className="rounded-lg bg-emerald-500 px-5 py-2.5 font-medium text-slate-950 transition hover:bg-emerald-400"
-            >
-              <Save className="size-4" />
-              Save leave balances
-            </LoadingButton>
-          </form>
+                  return (
+                    <article
+                      key={leaveType}
+                      className="rounded-xl border border-border bg-muted/30 p-4"
+                    >
+                      <p className="text-sm text-slate-400">
+                        {formatLeaveType(leaveType)}
+                      </p>
+                      <p className="mt-2 text-2xl font-semibold text-white">
+                        {balance?.availableDays ?? 0}
+                        <span className="text-sm font-normal text-slate-500">
+                          {' '}
+                          / {balance?.entitledDays ?? 0} available
+                        </span>
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Used {balance?.usedDays ?? 0} · Pending{' '}
+                        {balance?.pendingDays ?? 0}
+                        {(balance?.carriedOverDays ?? 0) > 0
+                          ? ` · Carried over ${balance?.carriedOverDays}`
+                          : ''}
+                        {leaveType === 'vacation' &&
+                        (balance?.silFloorDays ?? 0) > 0
+                          ? ` · SIL floor ${balance?.silFloorDays}`
+                          : ''}
+                      </p>
+                    </article>
+                  );
+                })}
+              </div>
+
+              <form className="mt-6 space-y-4" onSubmit={handleBalancesSubmit}>
+                <div className="grid gap-4 md:grid-cols-3">
+                  {BALANCE_TYPES.map((leaveType) => (
+                    <label key={leaveType} className="block space-y-2">
+                      <span className="text-sm text-slate-300">
+                        {formatLeaveType(leaveType)} company days
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={365}
+                        required
+                        value={balanceInputs[leaveType] ?? 0}
+                        onFocus={(event) =>
+                          selectZeroNumberInputOnFocus(
+                            event,
+                            balanceInputs[leaveType] ?? 0,
+                          )
+                        }
+                        onChange={(event) =>
+                          setBalanceInputs((current) => ({
+                            ...current,
+                            [leaveType]: parseIntegerInput(event.target.value, {
+                              min: 0,
+                              max: 365,
+                            }),
+                          }))
+                        }
+                        className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                      />
+                    </label>
+                  ))}
+                </div>
+
+                <LoadingButton
+                  type="submit"
+                  loading={balanceLoading}
+                  loadingText="Saving…"
+                  className="rounded-lg bg-emerald-500 px-5 py-2.5 font-medium text-slate-950 transition hover:bg-emerald-400"
+                >
+                  <Save className="size-4" />
+                  Save leave balances
+                </LoadingButton>
+              </form>
+            </>
+          )}
         </section>
 
         <section className="rounded-2xl border border-border bg-card p-6">

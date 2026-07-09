@@ -58,11 +58,21 @@ export type EmployeeProfile = {
 
 export type LeaveBalance = {
   leaveType: string;
+  periodKey: string;
   periodYear: number;
+  periodStart: string | null;
+  periodEnd: string | null;
+  companyEntitledDays: number;
+  carriedOverDays: number;
+  silFloorDays: number;
   entitledDays: number;
   usedDays: number;
   pendingDays: number;
   availableDays: number;
+  periodClosed?: boolean;
+  forfeitedDays?: number;
+  convertedDays?: number;
+  conversionTarget?: string | null;
 };
 
 export type EmployeeRecord = {
@@ -75,9 +85,17 @@ export type EmployeeRecord = {
   leaveBalances: LeaveBalance[];
 };
 
+export type LeaveEligibility = {
+  eligible: boolean;
+  tenureMonthsRequired: number;
+  tenureMonthsServed: number;
+  hireDate: string | null;
+};
+
 export type EmployeeDetail = EmployeeRecord & {
   periodYear: number;
   leaveHistory: LeaveRequest[];
+  leaveEligibility?: LeaveEligibility | null;
 };
 
 export const DOCUMENT_CATEGORIES = [

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   CalendarDays,
+  CalendarCog,
   ClipboardList,
   Clock,
   CreditCard,
@@ -96,7 +97,16 @@ function buildNavItems(
         href: '/dashboard/leave',
         label: 'Leave',
         icon: CalendarDays,
+        exact: true,
       });
+
+      if (team.currentMember?.canManageTeam) {
+        items.push({
+          href: '/dashboard/leave/policy',
+          label: 'Leave policy',
+          icon: CalendarCog,
+        });
+      }
     }
 
     if (activeFeatures.includes('payroll')) {

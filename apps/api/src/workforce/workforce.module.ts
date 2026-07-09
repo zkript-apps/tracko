@@ -12,6 +12,7 @@ import { EmployeesService } from './employees/employees.service';
 import { HolidaysController } from './holidays/holidays.controller';
 import { HolidaysService } from './holidays/holidays.service';
 import { LeaveController } from './leave/leave.controller';
+import { LeavePolicyService } from './leave/leave-policy.service';
 import { LeaveService } from './leave/leave.service';
 import { PayrollController } from './payroll/payroll.controller';
 import { PayrollService } from './payroll/payroll.service';
@@ -34,6 +35,7 @@ import { WorkforceContextService } from './workforce-context.service';
     AttendanceBiometricsService,
     AttendanceService,
     LeaveService,
+    LeavePolicyService,
     EmployeesService,
     DtrService,
     PayrollService,

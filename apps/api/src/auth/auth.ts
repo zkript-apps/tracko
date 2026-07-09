@@ -12,7 +12,7 @@ import {
 } from '../org-invitations/org-invitations.store';
 import { createBranchAssignment } from '../organizations/branch-assignments.store';
 import { createEmployeeProfile } from '../workforce/employees/employee-profiles.store';
-import { ensureBalancesForUser } from '../workforce/employees/leave-balances.store';
+import { prepareEmployeeLeaveBalances } from '../workforce/leave/leave-balance.context';
 import { todayDateString } from '../workforce/employees/leave-days.util';
 import { buildAcceptInviteUrl } from '../org-invitations/invite-url';
 import { sendOrgInvitationEmail } from '../email/email.client';
@@ -278,12 +278,11 @@ export async function createAuth() {
                 contractStartDate: today,
               });
 
-              await ensureBalancesForUser({
+              await prepareEmployeeLeaveBalances({
                 organizationId: String(invitation.organizationId),
                 userId: user.id,
                 memberId: member.id,
                 branchId,
-                periodYear: new Date().getFullYear(),
               });
             }
           },

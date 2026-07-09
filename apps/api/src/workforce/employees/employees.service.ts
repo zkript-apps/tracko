@@ -26,12 +26,14 @@ import {
 } from './employee-profiles.store';
 import {
   BALANCE_LEAVE_TYPES,
-  ensureBalancesForUser,
-  serializeLeaveBalance,
   setEntitledDays,
   type BalanceLeaveType,
 } from './leave-balances.store';
 import { isValidDateString, todayDateString, countLeaveDays } from './leave-days.util';
+import { prepareEmployeeLeaveBalances } from '../leave/leave-balance.context';
+import { ensureLeavePolicy } from '../leave/leave-policy.store';
+import { resolveLeavePeriod } from '../leave/leave-period.util';
+import { resolveLeaveEligibility } from '../leave/leave-eligibility.util';
 import {
   validateWorkScheduleInput,
   serializeWorkSchedule,
@@ -143,6 +145,10 @@ export class EmployeesService {
     }
   }
 
+  private periodReferenceDate(periodYear: number): string {
+    return `${periodYear}-12-31`;
+  }
+
   private async buildEmployeeRecord(input: {
     organizationId: string;
     userId: string;
@@ -162,13 +168,15 @@ export class EmployeesService {
     });
 
     const balances = input.leaveEnabled
-      ? await ensureBalancesForUser({
-          organizationId: input.organizationId,
-          userId: input.userId,
-          memberId: input.memberId,
-          branchId: input.branchId,
-          periodYear: input.periodYear,
-        })
+      ? (
+          await prepareEmployeeLeaveBalances({
+            organizationId: input.organizationId,
+            userId: input.userId,
+            memberId: input.memberId,
+            branchId: input.branchId,
+            referenceDate: this.periodReferenceDate(input.periodYear),
+          })
+        ).balances
       : [];
 
     const user = input.userMap.get(String(input.userId));
@@ -180,7 +188,7 @@ export class EmployeesService {
       email: user?.email ?? '',
       branchId: input.branchId,
       profile: serializeEmployeeProfile(profile),
-      leaveBalances: balances.map(serializeLeaveBalance),
+      leaveBalances: balances,
     };
   }
 
@@ -246,6 +254,18 @@ export class EmployeesService {
     const leaveHistory = leaveEnabled
       ? await listLeaveRequestsForUser(context.organizationId, userId)
       : [];
+    const profile = await findProfileByUserId(context.organizationId, userId);
+    const policy = leaveEnabled
+      ? await ensureLeavePolicy(context.organizationId)
+      : null;
+    const leaveEligibility =
+      leaveEnabled && policy
+        ? resolveLeaveEligibility({
+            policy,
+            hireDate: profile?.hireDate,
+            asOfDate: todayDateString(),
+          })
+        : null;
 
     return {
       ...(await this.buildEmployeeRecord({
@@ -260,6 +280,7 @@ export class EmployeesService {
       })),
       periodYear: year,
       leaveHistory: leaveHistory.map(serializeLeaveHistoryItem),
+      leaveEligibility,
     };
   }
 
@@ -475,8 +496,25 @@ export class EmployeesService {
       throw new BadRequestException('At least one leave balance is required.');
     }
 
-    const updatedBalances = [];
+    const policy = await ensureLeavePolicy(context.organizationId);
+    const profile = await findProfileByUserId(context.organizationId, userId);
+    const eligibility = resolveLeaveEligibility({
+      policy,
+      hireDate: profile?.hireDate,
+      asOfDate: todayDateString(),
+    });
 
+    if (!eligibility.eligible) {
+      throw new BadRequestException(
+        `Employee is ineligible for leave until ${eligibility.tenureMonthsRequired} month(s) of service are completed.`,
+      );
+    }
+
+    const period = resolveLeavePeriod(
+      this.periodReferenceDate(year),
+      policy,
+      profile?.hireDate,
+    );
     for (const entry of input.balances) {
       if (!BALANCE_LEAVE_TYPES.includes(entry.leaveType)) {
         throw new BadRequestException('Invalid leave type for balance.');
@@ -486,20 +524,39 @@ export class EmployeesService {
         throw new BadRequestException('Entitled days must be between 0 and 365.');
       }
 
-      const balance = await setEntitledDays({
+      await setEntitledDays({
         organizationId: context.organizationId,
         userId,
         memberId: assignment.memberId,
         branchId: assignment.branchId,
         leaveType: entry.leaveType,
-        periodYear: year,
-        entitledDays: entry.entitledDays,
+        periodKey: period.periodKey,
+        periodYear: period.periodYear,
+        periodStart: period.periodStart,
+        periodEnd: period.periodEnd,
+        companyEntitledDays: entry.entitledDays,
+        policy,
+        hireDate: profile?.hireDate,
       });
-
-      updatedBalances.push(serializeLeaveBalance(balance));
     }
 
-    return { periodYear: year, leaveBalances: updatedBalances };
+    const serialized = (
+      await prepareEmployeeLeaveBalances({
+        organizationId: context.organizationId,
+        userId,
+        memberId: assignment.memberId,
+        branchId: assignment.branchId,
+        referenceDate: this.periodReferenceDate(year),
+      })
+    ).balances;
+
+    return {
+      periodYear: year,
+      periodKey: period.periodKey,
+      periodStart: period.periodStart,
+      periodEnd: period.periodEnd,
+      leaveBalances: serialized,
+    };
   }
 
   async getMyLeaveBalances(request: Request, periodYear?: number) {
@@ -518,17 +575,31 @@ export class EmployeesService {
       branchId: context.branchId!,
     });
 
-    const balances = await ensureBalancesForUser({
+    const result = await prepareEmployeeLeaveBalances({
       organizationId: context.organizationId,
       userId: context.userId,
       memberId: context.memberId,
       branchId: context.branchId!,
-      periodYear: year,
+      referenceDate: this.periodReferenceDate(year),
+    });
+    const profile = await findProfileByUserId(
+      context.organizationId,
+      context.userId,
+    );
+    const leaveEligibility = resolveLeaveEligibility({
+      policy: result.policy,
+      hireDate: profile?.hireDate,
+      asOfDate: todayDateString(),
     });
 
     return {
-      periodYear: year,
-      leaveBalances: balances.map(serializeLeaveBalance),
+      periodYear: result.period.periodYear,
+      periodKey: result.period.periodKey,
+      periodStart: result.period.periodStart,
+      periodEnd: result.period.periodEnd,
+      leaveBalances: result.balances,
+      silSafeguard: result.policy.silSafeguard,
+      leaveEligibility,
     };
   }
 

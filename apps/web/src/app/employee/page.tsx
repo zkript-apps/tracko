@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Fingerprint, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
+import { DateInput } from '@/components/ui/date-input';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { signOut, useSession } from '@/lib/auth-client';
 import {
@@ -51,11 +52,15 @@ import {
   getSelectableLeaveTypes,
   BALANCE_LEAVE_TYPES,
   type LeaveBalance,
+  type LeaveEligibility,
   type LeaveRequest,
 } from '@/lib/leave';
 import { getTeamOverview, type TeamOverview } from '@/lib/team';
 
 const LOCATION_POST_INTERVAL_MS = 60_000;
+
+const employeeDateInputClassName =
+  'h-auto border-slate-700 bg-slate-950 px-3 py-2 text-white focus-visible:ring-emerald-500 dark:bg-slate-950';
 
 export default function EmployeePage() {
   const router = useRouter();
@@ -64,6 +69,10 @@ export default function EmployeePage() {
   const [attendance, setAttendance] = useState<AttendanceStatus | null>(null);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([]);
+  const [leaveEligibility, setLeaveEligibility] = useState<LeaveEligibility | null>(
+    null,
+  );
+  const [leavePeriodLabel, setLeavePeriodLabel] = useState<string | null>(null);
   const [dtrRecords, setDtrRecords] = useState<DailyTimeRecord[]>([]);
   const [dtrRange, setDtrRange] = useState(defaultDtrRange);
   const [leaveType, setLeaveType] = useState<string>('vacation');
@@ -127,9 +136,14 @@ export default function EmployeePage() {
     });
   }, []);
 
+  const paidLeaveEligible = leaveEligibility?.eligible !== false;
+
   const selectableLeaveTypes = useMemo(
-    () => getSelectableLeaveTypes(leaveBalances),
-    [leaveBalances],
+    () =>
+      getSelectableLeaveTypes(leaveBalances, {
+        paidLeaveEligible,
+      }),
+    [leaveBalances, paidLeaveEligible],
   );
 
   const stopLocationSharing = useCallback(() => {
@@ -215,7 +229,12 @@ export default function EmployeePage() {
         : Promise.resolve([] as LeaveRequest[]),
       status.leaveEnabled
         ? getMyLeaveBalances()
-        : Promise.resolve({ leaveBalances: [] as LeaveBalance[] }),
+        : Promise.resolve({
+            leaveBalances: [] as LeaveBalance[],
+            periodStart: undefined,
+            periodEnd: undefined,
+            leaveEligibility: null,
+          }),
       getMyDtrRecords(dtrRange),
       getBiometricStatus(),
       getBiometricSupport(),
@@ -223,6 +242,12 @@ export default function EmployeePage() {
     ]);
     setLeaveRequests(requests);
     setLeaveBalances(balances.leaveBalances);
+    setLeaveEligibility(balances.leaveEligibility ?? null);
+    setLeavePeriodLabel(
+      balances.periodStart && balances.periodEnd
+        ? `${balances.periodStart} to ${balances.periodEnd}`
+        : null,
+    );
     setDtrRecords(dtr.records);
     setBiometricStatus(biometrics);
     setBiometricSupport(support);
@@ -679,11 +704,10 @@ export default function EmployeePage() {
             </p>
           </div>
 
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            <label className="block space-y-2">
+          <div className="mt-6 grid min-w-0 gap-4 sm:grid-cols-2">
+            <label className="block min-w-0 space-y-2">
               <span className="text-sm text-slate-300">From</span>
-              <input
-                type="date"
+              <DateInput
                 value={dtrRange.startDate}
                 onChange={(event) =>
                   setDtrRange((current) => ({
@@ -691,13 +715,12 @@ export default function EmployeePage() {
                     startDate: event.target.value,
                   }))
                 }
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                className={employeeDateInputClassName}
               />
             </label>
-            <label className="block space-y-2">
+            <label className="block min-w-0 space-y-2">
               <span className="text-sm text-slate-300">To</span>
-              <input
-                type="date"
+              <DateInput
                 value={dtrRange.endDate}
                 onChange={(event) =>
                   setDtrRange((current) => ({
@@ -705,7 +728,7 @@ export default function EmployeePage() {
                     endDate: event.target.value,
                   }))
                 }
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                className={employeeDateInputClassName}
               />
             </label>
           </div>
@@ -753,8 +776,27 @@ export default function EmployeePage() {
             <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
               <h2 className="text-lg font-semibold text-white">Leave balances</h2>
           <p className="mt-2 text-sm text-slate-400">
-            Available days for this year. Unpaid leave does not use a balance.
+            Available days for the current leave period
+            {leavePeriodLabel ? ` (${leavePeriodLabel})` : ''}. Unpaid leave
+            does not use a balance.
           </p>
+
+          {leaveEligibility?.eligible === false ? (
+            <div className="mt-6 rounded-xl border border-dashed border-slate-700 bg-slate-950/60 px-4 py-6 text-center">
+              <p className="font-medium text-white">
+                You are not yet eligible for paid leave
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                You have completed {leaveEligibility.tenureMonthsServed} of{' '}
+                {leaveEligibility.tenureMonthsRequired} required month(s) of
+                service
+                {leaveEligibility.hireDate
+                  ? ` since ${new Date(`${leaveEligibility.hireDate}T00:00:00`).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                  : ''}
+                . You can still request unpaid leave below.
+              </p>
+            </div>
+          ) : (
           <div className="mt-6 grid gap-4 sm:grid-cols-3">
             {BALANCE_LEAVE_TYPES.map((leaveType) => {
               const balance = leaveBalances.find(
@@ -775,23 +817,37 @@ export default function EmployeePage() {
                   <p className="mt-1 text-xs text-slate-500">
                     {balance?.usedDays ?? 0} used · {balance?.pendingDays ?? 0}{' '}
                     pending · {balance?.entitledDays ?? 0} total
+                    {(balance?.carriedOverDays ?? 0) > 0
+                      ? ` · ${balance?.carriedOverDays} carried over`
+                      : ''}
+                    {leaveType === 'vacation' && (balance?.silFloorDays ?? 0) > 0
+                      ? ` · SIL floor ${balance?.silFloorDays}`
+                      : ''}
                   </p>
                 </article>
               );
             })}
           </div>
+          )}
         </section>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+        <section className="min-w-0 rounded-2xl border border-slate-800 bg-slate-900 p-6">
           <h2 className="text-lg font-semibold text-white">Request leave</h2>
+          {leaveEligibility?.eligible === false ? (
+            <p className="mt-4 text-sm text-slate-400">
+              Paid leave types are unavailable until you complete{' '}
+              {leaveEligibility.tenureMonthsRequired} month(s) of service. You can
+              still submit an unpaid leave request.
+            </p>
+          ) : null}
           {selectableLeaveTypes.length === 0 ? (
             <p className="mt-4 text-sm text-slate-400">
               You have no leave balance available. Contact HR if you need to
               request time off.
             </p>
           ) : (
-            <form className="mt-6 space-y-4" onSubmit={handleLeaveSubmit}>
-              <label className="block space-y-2">
+            <form className="mt-6 min-w-0 space-y-4" onSubmit={handleLeaveSubmit}>
+              <label className="block min-w-0 space-y-2">
                 <span className="text-sm text-slate-300">Leave type</span>
                 <select
                   required
@@ -807,30 +863,28 @@ export default function EmployeePage() {
                 </select>
               </label>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block space-y-2">
+            <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+              <label className="block min-w-0 space-y-2">
                 <span className="text-sm text-slate-300">Start date</span>
-                <input
-                  type="date"
+                <DateInput
                   required
                   value={startDate}
                   onChange={(event) => setStartDate(event.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                  className={employeeDateInputClassName}
                 />
               </label>
-              <label className="block space-y-2">
+              <label className="block min-w-0 space-y-2">
                 <span className="text-sm text-slate-300">End date</span>
-                <input
-                  type="date"
+                <DateInput
                   required
                   value={endDate}
                   onChange={(event) => setEndDate(event.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                  className={employeeDateInputClassName}
                 />
               </label>
             </div>
 
-            <label className="block space-y-2">
+            <label className="block min-w-0 space-y-2">
               <span className="text-sm text-slate-300">Reason</span>
               <textarea
                 required
