@@ -25,6 +25,30 @@ import {
 
 const SUPER_ADMIN_ROLE = 'super_admin';
 
+function resolveAdvancedAuthOptions() {
+  const apiUrl = process.env.API_URL ?? 'http://localhost:3001';
+  const webUrl = process.env.WEB_URL ?? 'http://localhost:3000';
+
+  let crossOrigin = false;
+  try {
+    crossOrigin = new URL(apiUrl).origin !== new URL(webUrl).origin;
+  } catch {
+    crossOrigin = false;
+  }
+
+  if (!crossOrigin) {
+    return {};
+  }
+
+  return {
+    useSecureCookies: true,
+    defaultCookieAttributes: {
+      sameSite: 'none' as const,
+      secure: true,
+    },
+  };
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let authInstance: any = null;
 
@@ -43,6 +67,7 @@ export async function createAuth() {
     secret:
       process.env.AUTH_SECRET ??
       'dev-secret-change-in-production-min-32-chars',
+    advanced: resolveAdvancedAuthOptions(),
     trustedOrigins: (process.env.TRUSTED_ORIGINS ?? 'http://localhost:3000')
       .split(',')
       .map((origin) => origin.trim())
