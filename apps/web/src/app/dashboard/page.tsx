@@ -11,13 +11,6 @@ import {
 } from '@/lib/org-roles';
 import { getTeamOverview, type TeamOverview } from '@/lib/team';
 
-const modules = [
-  {
-    title: 'Live Location',
-    description: 'Monitor field teams and geofence alerts in real time.',
-  },
-] as const;
-
 export default function DashboardPage() {
   const { data: session } = useSession();
   const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null);
@@ -137,24 +130,26 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <section>
-        <h2 className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-muted-foreground">
-          Coming soon
-        </h2>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {modules.map((module) => (
-            <article
-              key={module.title}
-              className="rounded-xl border border-border bg-card p-5"
-            >
-              <h3 className="font-medium text-foreground">{module.title}</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {module.description}
-              </p>
-            </article>
-          ))}
-        </div>
-      </section>
+      {canManageWorkforce ? (
+        <section className="rounded-2xl border border-border bg-card p-6">
+          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+            Live location
+          </p>
+          <h2 className="mt-2 text-xl font-semibold text-foreground">
+            See where on-duty employees are
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+            The attendance map refreshes every 5 minutes with locations shared
+            while employees keep the portal open during their shift.
+          </p>
+          <Link
+            href="/dashboard/attendance"
+            className="mt-4 inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+          >
+            Open live map
+          </Link>
+        </section>
+      ) : null}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Fingerprint, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
@@ -13,6 +13,8 @@ import {
   clockOut,
   formatAttendanceTime,
   getMyAttendanceStatus,
+  getRequiredLocation,
+  postMyLiveLocation,
   type AttendanceStatus,
 } from '@/lib/attendance';
 import {
@@ -50,27 +52,7 @@ import {
 } from '@/lib/leave';
 import { getTeamOverview, type TeamOverview } from '@/lib/team';
 
-async function getOptionalLocation(): Promise<{
-  latitude?: number;
-  longitude?: number;
-}> {
-  if (!navigator.geolocation) {
-    return {};
-  }
-
-  return new Promise((resolve) => {
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        resolve({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        });
-      },
-      () => resolve({}),
-      { enableHighAccuracy: true, timeout: 8000 },
-    );
-  });
-}
+const LOCATION_POST_INTERVAL_MS = 60_000;
 
 export default function EmployeePage() {
   const router = useRouter();
@@ -96,11 +78,116 @@ export default function EmployeePage() {
   } | null>(null);
   const [leaveLoading, setLeaveLoading] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [locationSharing, setLocationSharing] = useState(false);
+  const locationWatchIdRef = useRef<number | null>(null);
+  const locationPostIntervalRef = useRef<number | null>(null);
+  const lastLocationPostRef = useRef(0);
+
+  const postCurrentLocation = useCallback(async (force = false) => {
+    if (!navigator.geolocation) {
+      return;
+    }
+
+    const now = Date.now();
+    if (
+      !force &&
+      now - lastLocationPostRef.current < LOCATION_POST_INTERVAL_MS
+    ) {
+      return;
+    }
+
+    return new Promise<void>((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          lastLocationPostRef.current = Date.now();
+          void postMyLiveLocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+          })
+            .then(() => {
+              setLocationSharing(true);
+            })
+            .catch(() => {
+              // Keep trying on the next interval tick.
+            })
+            .finally(resolve);
+        },
+        () => {
+          setLocationSharing(false);
+          resolve();
+        },
+        { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 },
+      );
+    });
+  }, []);
 
   const selectableLeaveTypes = useMemo(
     () => getSelectableLeaveTypes(leaveBalances),
     [leaveBalances],
   );
+
+  const stopLocationSharing = useCallback(() => {
+    if (locationWatchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(locationWatchIdRef.current);
+      locationWatchIdRef.current = null;
+    }
+    if (locationPostIntervalRef.current !== null) {
+      window.clearInterval(locationPostIntervalRef.current);
+      locationPostIntervalRef.current = null;
+    }
+    setLocationSharing(false);
+  }, []);
+
+  const startLocationSharing = useCallback(() => {
+    if (!navigator.geolocation) {
+      return;
+    }
+
+    void postCurrentLocation(true);
+
+    if (locationPostIntervalRef.current === null) {
+      locationPostIntervalRef.current = window.setInterval(() => {
+        void postCurrentLocation();
+      }, LOCATION_POST_INTERVAL_MS);
+    }
+
+    if (locationWatchIdRef.current !== null) {
+      setLocationSharing(true);
+      return;
+    }
+
+    locationWatchIdRef.current = navigator.geolocation.watchPosition(
+      (position) => {
+        const now = Date.now();
+        if (now - lastLocationPostRef.current < LOCATION_POST_INTERVAL_MS) {
+          return;
+        }
+
+        lastLocationPostRef.current = now;
+        void postMyLiveLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+        })
+          .then(() => {
+            setLocationSharing(true);
+          })
+          .catch(() => {
+            // Interval fallback will retry.
+          });
+      },
+      () => {
+        setLocationSharing(false);
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 30_000,
+        timeout: 20_000,
+      },
+    );
+    setLocationSharing(true);
+  }, [postCurrentLocation]);
 
   useEffect(() => {
     if (selectableLeaveTypes.length === 0) {
@@ -129,6 +216,25 @@ export default function EmployeePage() {
     setBiometricStatus(biometrics);
     setBiometricSupport(support);
   }, [dtrRange]);
+
+  useEffect(() => {
+    if (!attendance) {
+      return;
+    }
+
+    if (attendance.isClockedIn) {
+      startLocationSharing();
+      return;
+    }
+
+    stopLocationSharing();
+  }, [attendance, startLocationSharing, stopLocationSharing]);
+
+  useEffect(() => {
+    return () => {
+      stopLocationSharing();
+    };
+  }, [stopLocationSharing]);
 
   useEffect(() => {
     if (isPending) {
@@ -204,10 +310,11 @@ export default function EmployeePage() {
         return;
       }
 
-      const location = await getOptionalLocation();
+      const location = await getRequiredLocation();
       const payload: {
-        latitude?: number;
-        longitude?: number;
+        latitude: number;
+        longitude: number;
+        accuracy?: number;
         biometricResponse?: Awaited<ReturnType<typeof authenticateWithBiometric>>;
       } = { ...location };
 
@@ -220,6 +327,7 @@ export default function EmployeePage() {
         toast.success('Clocked in successfully.');
       } else {
         await clockOut(payload);
+        stopLocationSharing();
         toast.success('Clocked out successfully.');
       }
 
@@ -274,6 +382,7 @@ export default function EmployeePage() {
   }
 
   async function handleSignOut() {
+    stopLocationSharing();
     await signOut();
     router.push('/sign-in');
     router.refresh();
@@ -376,6 +485,14 @@ export default function EmployeePage() {
                     : biometricStatus?.enrolled
                       ? 'Clock in with biometrics to start your shift.'
                       : 'You are currently clocked out.'}
+              </p>
+              <p className="mt-2 text-sm text-slate-500">
+                Location is required to clock in or out.
+                {attendance.isClockedIn
+                  ? locationSharing
+                    ? ' Location sharing is on while you are on duty.'
+                    : ' Keep this page open to share your live location with HR.'
+                  : ''}
               </p>
             </div>
             <span
