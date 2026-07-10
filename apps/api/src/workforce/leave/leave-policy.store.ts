@@ -2,6 +2,8 @@ import { randomBytes } from 'crypto';
 import { getMongoDb } from '../../database/mongo';
 import {
   DEFAULT_LEAVE_POLICY,
+  DEFAULT_LEAVE_ACCRUAL,
+  DEFAULT_PERIOD_AUTO_GRANT,
   type LeavePolicy,
   type LeavePolicyInput,
 } from './leave-policy.types';
@@ -63,6 +65,8 @@ export async function upsertLeavePolicy(
           resetType: input.resetType,
           fiscalYearStartMonth: input.fiscalYearStartMonth,
           silSafeguard: input.silSafeguard,
+          periodAutoGrant: input.periodAutoGrant,
+          accrual: input.accrual,
           vacation: input.vacation,
           sick: input.sick,
           updatedAt: now,
@@ -95,6 +99,8 @@ export function serializeLeavePolicy(policy: LeavePolicy) {
     resetType: policy.resetType,
     fiscalYearStartMonth: policy.fiscalYearStartMonth,
     silSafeguard: policy.silSafeguard,
+    periodAutoGrant: policy.periodAutoGrant ?? DEFAULT_PERIOD_AUTO_GRANT,
+    accrual: policy.accrual ?? DEFAULT_LEAVE_ACCRUAL,
     vacation: policy.vacation,
     sick: policy.sick,
     updatedAt: policy.updatedAt.toISOString(),

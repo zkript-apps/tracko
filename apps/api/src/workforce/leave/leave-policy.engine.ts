@@ -26,6 +26,7 @@ import {
   hasPeriodBeenClosed,
   markLeavePeriodClosed,
 } from './leave-cash-outs.store';
+import { applyPeriodAutoGrantIfNeeded } from './leave-period-grant.util';
 
 type PolicyLeaveType = 'vacation' | 'sick';
 
@@ -326,5 +327,15 @@ export async function syncLeaveBalancesForPeriod(input: {
     organizationId: input.organizationId,
     userId: input.userId,
     periodKey: previousPeriod.periodKey,
+  });
+
+  await applyPeriodAutoGrantIfNeeded({
+    organizationId: input.organizationId,
+    userId: input.userId,
+    memberId: input.memberId,
+    branchId: input.branchId,
+    policy: input.policy,
+    period: currentPeriod,
+    hireDate,
   });
 }

@@ -18,10 +18,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useSession } from '@/lib/auth-client';
 import {
   DEFAULT_LEAVE_POLICY,
+  DEFAULT_LEAVE_ACCRUAL,
+  DEFAULT_PERIOD_AUTO_GRANT,
   getLeavePolicy,
+  LEAVE_ACCRUAL_METHODS,
   LEAVE_CONVERSION_TARGETS,
   LEAVE_RESET_TYPES,
   updateLeavePolicy,
+  type LeaveAccrualMethod,
   type LeaveConversionTarget,
   type LeavePolicy,
   type LeaveResetType,
@@ -179,13 +183,37 @@ function LeaveTypeRulesEditor({
   );
 }
 
+function normalizePolicy(policy: LeavePolicy): LeavePolicy {
+  return {
+    ...DEFAULT_LEAVE_POLICY,
+    ...policy,
+    periodAutoGrant: policy.periodAutoGrant ?? DEFAULT_PERIOD_AUTO_GRANT,
+    accrual: policy.accrual ?? DEFAULT_LEAVE_ACCRUAL,
+  };
+}
+
+function getPolicySnapshot(policy: LeavePolicy) {
+  return JSON.stringify({
+    resetType: policy.resetType,
+    fiscalYearStartMonth: policy.fiscalYearStartMonth,
+    silSafeguard: policy.silSafeguard,
+    periodAutoGrant: policy.periodAutoGrant,
+    accrual: policy.accrual,
+    vacation: policy.vacation,
+    sick: policy.sick,
+  });
+}
+
 export default function LeavePolicyPage() {
   const router = useRouter();
   const { data: session } = useSession();
   const [team, setTeam] = useState<TeamOverview | null>(null);
   const [policy, setPolicy] = useState<LeavePolicy>(DEFAULT_LEAVE_POLICY);
+  const [savedPolicy, setSavedPolicy] = useState<LeavePolicy>(DEFAULT_LEAVE_POLICY);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const hasChanges =
+    getPolicySnapshot(policy) !== getPolicySnapshot(savedPolicy);
 
   useEffect(() => {
     if (!session) {
@@ -210,7 +238,9 @@ export default function LeavePolicyPage() {
       })
       .then((nextPolicy) => {
         if (nextPolicy) {
-          setPolicy(nextPolicy);
+          const normalized = normalizePolicy(nextPolicy);
+          setPolicy(normalized);
+          setSavedPolicy(normalized);
         }
       })
       .catch(() => router.replace('/dashboard'))
@@ -219,6 +249,11 @@ export default function LeavePolicyPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (!hasChanges) {
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -226,10 +261,14 @@ export default function LeavePolicyPage() {
         resetType: policy.resetType,
         fiscalYearStartMonth: policy.fiscalYearStartMonth,
         silSafeguard: policy.silSafeguard,
+        periodAutoGrant: policy.periodAutoGrant,
+        accrual: policy.accrual,
         vacation: policy.vacation,
         sick: policy.sick,
       });
-      setPolicy(updated);
+      const normalized = normalizePolicy(updated);
+      setPolicy(normalized);
+      setSavedPolicy(normalized);
       toast.success('Leave policy updated.');
     } catch (submitError) {
       toast.error(
@@ -311,6 +350,164 @@ export default function LeavePolicyPage() {
                 />
               </label>
             ) : null}
+          </div>
+
+          <div className="mt-6 space-y-4 rounded-xl border border-border bg-muted/20 p-5">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">
+                Accrual / proration method
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                How annual leave credits are calculated for employees who start
+                mid-period. Employees hired before the period starts receive the
+                full annual credits.
+              </p>
+            </div>
+            <label className="block space-y-2">
+              <Label>Accrual method</Label>
+              <Select
+                value={policy.accrual.method}
+                onValueChange={(value) =>
+                  setPolicy((current) => ({
+                    ...current,
+                    accrual: {
+                      ...current.accrual,
+                      method: value as LeaveAccrualMethod,
+                    },
+                  }))
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select accrual method" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LEAVE_ACCRUAL_METHODS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-muted-foreground">
+                {
+                  LEAVE_ACCRUAL_METHODS.find(
+                    (option) => option.value === policy.accrual.method,
+                  )?.description
+                }
+              </p>
+            </label>
+            {policy.accrual.method === 'monthly_cutoff' ? (
+              <label className="block max-w-xs space-y-2">
+                <Label>Monthly cutoff day</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={28}
+                  value={policy.accrual.monthlyCutoffDay}
+                  onChange={(event) =>
+                    setPolicy((current) => ({
+                      ...current,
+                      accrual: {
+                        ...current.accrual,
+                        monthlyCutoffDay: parseIntegerInput(event.target.value, {
+                          min: 1,
+                          max: 28,
+                        }),
+                      },
+                    }))
+                  }
+                />
+                <p className="text-sm text-muted-foreground">
+                  Hired on or before this day counts the hire month toward
+                  accrual. Hired after it starts next month.
+                </p>
+              </label>
+            ) : null}
+            {policy.accrual.method === 'anniversary_full' &&
+            policy.resetType !== 'anniversary' ? (
+              <p className="text-sm text-amber-700 dark:text-amber-400">
+                Anniversary-based full grant works best when the reset schedule
+                is set to hire-date anniversary.
+              </p>
+            ) : null}
+          </div>
+
+          <div className="mt-6 space-y-3 rounded-xl border border-border bg-muted/20 p-5">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">
+                Period auto-grant (annual credits)
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Annual leave credits per type. For mid-period hires, the chosen
+                accrual method prorates these credits when a new period starts
+                for employees who have completed the required tenure.
+              </p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              <label className="block space-y-2">
+                <Label>Annual vacation leave credits</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={365}
+                  value={policy.periodAutoGrant.vacation}
+                  onChange={(event) =>
+                    setPolicy((current) => ({
+                      ...current,
+                      periodAutoGrant: {
+                        ...current.periodAutoGrant,
+                        vacation: parseIntegerInput(event.target.value, {
+                          min: 0,
+                          max: 365,
+                        }),
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="block space-y-2">
+                <Label>Annual sick leave credits</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={365}
+                  value={policy.periodAutoGrant.sick}
+                  onChange={(event) =>
+                    setPolicy((current) => ({
+                      ...current,
+                      periodAutoGrant: {
+                        ...current.periodAutoGrant,
+                        sick: parseIntegerInput(event.target.value, {
+                          min: 0,
+                          max: 365,
+                        }),
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="block space-y-2">
+                <Label>Annual emergency leave credits</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={365}
+                  value={policy.periodAutoGrant.emergency}
+                  onChange={(event) =>
+                    setPolicy((current) => ({
+                      ...current,
+                      periodAutoGrant: {
+                        ...current.periodAutoGrant,
+                        emergency: parseIntegerInput(event.target.value, {
+                          min: 0,
+                          max: 365,
+                        }),
+                      },
+                    }))
+                  }
+                />
+              </label>
+            </div>
           </div>
         </section>
 
@@ -410,7 +607,12 @@ export default function LeavePolicyPage() {
           onChange={(sick) => setPolicy((current) => ({ ...current, sick }))}
         />
 
-        <LoadingButton type="submit" loading={saving} loadingText="Saving…">
+        <LoadingButton
+          type="submit"
+          loading={saving}
+          loadingText="Saving…"
+          disabled={!hasChanges}
+        >
           <Save className="size-4" />
           Save leave policy
         </LoadingButton>

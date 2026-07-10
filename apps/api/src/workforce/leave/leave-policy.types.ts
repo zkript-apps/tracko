@@ -28,12 +28,35 @@ export type SilSafeguard = {
   cashOutUnused: boolean;
 };
 
+export type PeriodAutoGrant = {
+  vacation: number;
+  sick: number;
+  emergency: number;
+};
+
+export const LEAVE_ACCRUAL_METHODS = [
+  'straight_line_monthly',
+  'daily_precise',
+  'monthly_cutoff',
+  'no_proration',
+  'anniversary_full',
+] as const;
+
+export type LeaveAccrualMethod = (typeof LEAVE_ACCRUAL_METHODS)[number];
+
+export type LeaveAccrualSettings = {
+  method: LeaveAccrualMethod;
+  monthlyCutoffDay: number;
+};
+
 export interface LeavePolicy {
   _id: string;
   organizationId: string;
   resetType: LeaveResetType;
   fiscalYearStartMonth: number;
   silSafeguard: SilSafeguard;
+  periodAutoGrant: PeriodAutoGrant;
+  accrual: LeaveAccrualSettings;
   vacation: LeaveTypeRules;
   sick: LeaveTypeRules;
   createdAt: Date;
@@ -44,8 +67,21 @@ export type LeavePolicyInput = {
   resetType: LeaveResetType;
   fiscalYearStartMonth: number;
   silSafeguard: SilSafeguard;
+  periodAutoGrant: PeriodAutoGrant;
+  accrual: LeaveAccrualSettings;
   vacation: LeaveTypeRules;
   sick: LeaveTypeRules;
+};
+
+export const DEFAULT_PERIOD_AUTO_GRANT: PeriodAutoGrant = {
+  vacation: 0,
+  sick: 0,
+  emergency: 0,
+};
+
+export const DEFAULT_LEAVE_ACCRUAL: LeaveAccrualSettings = {
+  method: 'straight_line_monthly',
+  monthlyCutoffDay: 15,
 };
 
 export const DEFAULT_LEAVE_POLICY: LeavePolicyInput = {
@@ -57,6 +93,8 @@ export const DEFAULT_LEAVE_POLICY: LeavePolicyInput = {
     tenureMonths: 12,
     cashOutUnused: true,
   },
+  periodAutoGrant: DEFAULT_PERIOD_AUTO_GRANT,
+  accrual: DEFAULT_LEAVE_ACCRUAL,
   vacation: {
     carryOver: { enabled: false, maxDays: 0 },
     forfeiture: { enabled: true },

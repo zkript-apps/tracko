@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import {
+  LEAVE_ACCRUAL_METHODS,
   LEAVE_CONVERSION_TARGETS,
   LEAVE_RESET_TYPES,
   type LeavePolicyInput,
@@ -82,6 +83,32 @@ export class LeavePolicyService {
       if (!LEAVE_CONVERSION_TARGETS.includes(rules.conversion.target)) {
         throw new BadRequestException('Invalid leave conversion target.');
       }
+    }
+
+    for (const days of [
+      input.periodAutoGrant.vacation,
+      input.periodAutoGrant.sick,
+      input.periodAutoGrant.emergency,
+    ]) {
+      if (!Number.isInteger(days) || days < 0 || days > 365) {
+        throw new BadRequestException(
+          'Period auto-grant days must be between 0 and 365.',
+        );
+      }
+    }
+
+    if (!LEAVE_ACCRUAL_METHODS.includes(input.accrual.method)) {
+      throw new BadRequestException('Invalid leave accrual method.');
+    }
+
+    if (
+      !Number.isInteger(input.accrual.monthlyCutoffDay) ||
+      input.accrual.monthlyCutoffDay < 1 ||
+      input.accrual.monthlyCutoffDay > 28
+    ) {
+      throw new BadRequestException(
+        'Monthly cutoff day must be between 1 and 28.',
+      );
     }
   }
 

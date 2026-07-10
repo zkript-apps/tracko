@@ -38,13 +38,73 @@ export type SilSafeguard = {
   cashOutUnused: boolean;
 };
 
+export type PeriodAutoGrant = {
+  vacation: number;
+  sick: number;
+  emergency: number;
+};
+
+export const LEAVE_ACCRUAL_METHODS = [
+  {
+    value: 'straight_line_monthly',
+    label: 'Straight-line monthly accrual',
+    description:
+      '(Annual credits ÷ 12) × months of service remaining in the period. Most common.',
+  },
+  {
+    value: 'daily_precise',
+    label: 'Daily / precise accrual',
+    description:
+      '(Annual credits ÷ 365) × days of service remaining in the period. More granular.',
+  },
+  {
+    value: 'monthly_cutoff',
+    label: 'Monthly accrual with cutoff rule',
+    description:
+      'Monthly rate with a hire-day cutoff. Hired on or before the cutoff day counts the hire month; otherwise accrual starts next month.',
+  },
+  {
+    value: 'no_proration',
+    label: 'No proration (full grant)',
+    description:
+      'Grants the full annual credits even for mid-period hires. Simple but more generous.',
+  },
+  {
+    value: 'anniversary_full',
+    label: 'Anniversary-based (full grant)',
+    description:
+      'Grants full annual credits each period. Works best with hire-date anniversary resets.',
+  },
+] as const;
+
+export type LeaveAccrualMethod =
+  (typeof LEAVE_ACCRUAL_METHODS)[number]['value'];
+
+export type LeaveAccrualSettings = {
+  method: LeaveAccrualMethod;
+  monthlyCutoffDay: number;
+};
+
 export type LeavePolicy = {
   resetType: LeaveResetType;
   fiscalYearStartMonth: number;
   silSafeguard: SilSafeguard;
+  periodAutoGrant: PeriodAutoGrant;
+  accrual: LeaveAccrualSettings;
   vacation: LeaveTypeRules;
   sick: LeaveTypeRules;
   updatedAt: string;
+};
+
+export const DEFAULT_PERIOD_AUTO_GRANT: PeriodAutoGrant = {
+  vacation: 0,
+  sick: 0,
+  emergency: 0,
+};
+
+export const DEFAULT_LEAVE_ACCRUAL: LeaveAccrualSettings = {
+  method: 'straight_line_monthly',
+  monthlyCutoffDay: 15,
 };
 
 export const DEFAULT_LEAVE_POLICY: LeavePolicy = {
@@ -56,6 +116,8 @@ export const DEFAULT_LEAVE_POLICY: LeavePolicy = {
     tenureMonths: 12,
     cashOutUnused: true,
   },
+  periodAutoGrant: DEFAULT_PERIOD_AUTO_GRANT,
+  accrual: DEFAULT_LEAVE_ACCRUAL,
   vacation: {
     carryOver: { enabled: false, maxDays: 0 },
     forfeiture: { enabled: true },
@@ -93,5 +155,12 @@ export function formatConversionTarget(target: LeaveConversionTarget): string {
   return (
     LEAVE_CONVERSION_TARGETS.find((item) => item.value === target)?.label ??
     target
+  );
+}
+
+export function formatAccrualMethod(method: LeaveAccrualMethod): string {
+  return (
+    LEAVE_ACCRUAL_METHODS.find((item) => item.value === method)?.label ??
+    method
   );
 }

@@ -6,6 +6,7 @@ import {
 } from '../employees/leave-balances.store';
 import { todayDateString } from '../employees/leave-days.util';
 import { syncLeaveBalancesForPeriod } from './leave-policy.engine';
+import { applyPeriodAutoGrantIfNeeded } from './leave-period-grant.util';
 import { resolveLeavePeriod } from './leave-period.util';
 import { ensureLeavePolicy } from './leave-policy.store';
 
@@ -47,11 +48,27 @@ export async function prepareEmployeeLeaveBalances(input: {
     hireDate,
   });
 
+  await applyPeriodAutoGrantIfNeeded({
+    organizationId: input.organizationId,
+    userId: input.userId,
+    memberId: input.memberId,
+    branchId: input.branchId,
+    policy,
+    period,
+    hireDate,
+  });
+
+  const refreshedBalances = await listBalancesForUser(
+    input.organizationId,
+    input.userId,
+    period.periodKey,
+  );
+
   return {
     policy,
     period,
     hireDate,
-    balances: balances.map(serializeLeaveBalance),
+    balances: refreshedBalances.map(serializeLeaveBalance),
   };
 }
 

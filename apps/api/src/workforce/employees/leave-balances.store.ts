@@ -41,6 +41,7 @@ export interface LeaveBalance {
   forfeitedDays?: number;
   convertedDays?: number;
   conversionTarget?: LeaveConversionTarget;
+  periodAutoGrantApplied?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -227,6 +228,7 @@ export async function setBalanceEntitlement(input: {
   silFloorDays: number;
   usedDays: number;
   pendingDays: number;
+  periodAutoGrantApplied?: boolean;
 }): Promise<LeaveBalance> {
   const collection = await getCollection();
   const now = new Date();
@@ -252,6 +254,7 @@ export async function setBalanceEntitlement(input: {
           entitledDays: input.entitledDays,
           usedDays: input.usedDays,
           pendingDays: input.pendingDays,
+          periodAutoGrantApplied: input.periodAutoGrantApplied ?? false,
           updatedAt: now,
         },
       },
@@ -282,6 +285,7 @@ export async function setBalanceEntitlement(input: {
     entitledDays: input.entitledDays,
     usedDays: input.usedDays,
     pendingDays: input.pendingDays,
+    periodAutoGrantApplied: input.periodAutoGrantApplied ?? false,
     createdAt: now,
     updatedAt: now,
   };
