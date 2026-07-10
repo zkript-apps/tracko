@@ -1,10 +1,30 @@
 import { createAuthClient } from 'better-auth/react';
-import { organizationClient } from 'better-auth/client/plugins';
+import {
+  inferAdditionalFields,
+  organizationClient,
+} from 'better-auth/client/plugins';
 import { resolveAuthClientConfig } from './api';
 
 export const authClient = createAuthClient({
   ...resolveAuthClientConfig(),
-  plugins: [organizationClient()],
+  plugins: [
+    organizationClient(),
+    inferAdditionalFields({
+      user: {
+        platformRole: {
+          type: 'string',
+          required: false,
+          input: false,
+        },
+        themeMode: {
+          type: 'string',
+          required: false,
+          defaultValue: 'dark',
+          input: true,
+        },
+      },
+    }),
+  ],
 });
 
 export const { signIn, signUp, signOut, useSession, getSession, organization } =

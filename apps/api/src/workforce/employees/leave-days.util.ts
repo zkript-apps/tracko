@@ -13,6 +13,8 @@ export function leavePeriodYear(startDate: string): number {
   return Number(startDate.slice(0, 4));
 }
 
+export { resolveLeavePeriod, formatResetTypeLabel } from '../leave/leave-period.util';
+
 export function todayDateString(): string {
   const now = new Date();
   const year = now.getFullYear();

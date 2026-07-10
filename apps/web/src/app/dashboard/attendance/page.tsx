@@ -4,6 +4,14 @@ import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useSession } from '@/lib/auth-client';
 import {
   formatAttendanceTime,
@@ -213,21 +221,28 @@ export default function AttendancePage() {
       ) : null}
 
       {isAdmin ? (
-        <label className="block max-w-sm space-y-2">
-          <span className="text-sm text-muted-foreground">Branch</span>
-          <select
-            value={branchId}
-            onChange={(event) => setBranchId(event.target.value)}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground outline-none ring-ring focus:ring-2"
+        <div className="max-w-sm space-y-2">
+          <Label htmlFor="attendance-branch">Branch</Label>
+          <Select
+            value={branchId || 'all'}
+            onValueChange={(value) =>
+              setBranchId(value === 'all' ? '' : value)
+            }
           >
-            <option value="">All branches</option>
-            {team.branches.map((branch) => (
-              <option key={branch._id} value={branch._id}>
-                {branch.name}
-              </option>
-            ))}
-          </select>
-        </label>
+            <SelectTrigger id="attendance-branch" className="w-full">
+              <SelectValue placeholder="Select branch" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All branches</SelectItem>
+              {team.branches.map((branch) => (
+                <SelectItem key={branch._id} value={branch._id}>
+                  {branch.name}
+                  {branch.isHeadOffice ? ' (Head office)' : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       ) : null}
 
       <section className="grid gap-4 sm:grid-cols-3">

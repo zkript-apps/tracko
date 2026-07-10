@@ -68,14 +68,14 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-12">
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-xl">
         <div className="mb-8 space-y-2 text-center">
-          <p className="text-sm font-medium uppercase tracking-[0.2em] text-emerald-400">
+          <p className="text-sm font-medium uppercase tracking-[0.2em] text-primary">
             Tracko
           </p>
-          <h1 className="text-2xl font-semibold text-white">Sign in</h1>
-          <p className="text-sm text-slate-400">
+          <h1 className="text-2xl font-semibold text-foreground">Sign in</h1>
+          <p className="text-sm text-muted-foreground">
             Sign in with the email and password you used when accepting your
             invitation.
           </p>
@@ -83,20 +83,20 @@ export default function SignInPage() {
 
         <form className="space-y-4" onSubmit={handleSubmit}>
           <label className="block space-y-2">
-            <span className="text-sm text-slate-300">Email</span>
+            <span className="text-sm text-muted-foreground">Email</span>
             <input
               type="email"
               required
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               disabled={loading}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2 disabled:opacity-60"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground outline-none ring-ring focus:ring-2 disabled:opacity-60"
               placeholder="hr@company.com"
             />
           </label>
 
           <label className="block space-y-2">
-            <span className="text-sm text-slate-300">Password</span>
+            <span className="text-sm text-muted-foreground">Password</span>
             <PasswordInput
               required
               value={password}
@@ -107,7 +107,7 @@ export default function SignInPage() {
           </label>
 
           {error ? (
-            <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error}
             </p>
           ) : null}
@@ -116,13 +116,13 @@ export default function SignInPage() {
             type="submit"
             loading={loading}
             loadingText="Signing in…"
-            className="w-full rounded-lg bg-emerald-500 px-4 py-2.5 font-medium text-slate-950 transition hover:bg-emerald-400"
+            className="w-full"
           >
             Sign in
           </LoadingButton>
         </form>
 
-        <p className="mt-6 text-center text-sm text-slate-400">
+        <p className="mt-6 text-center text-sm text-muted-foreground">
           New accounts require an invitation link from your organization admin or
           HR manager.
         </p>

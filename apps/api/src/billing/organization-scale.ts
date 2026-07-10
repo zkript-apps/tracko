@@ -24,10 +24,10 @@ export const ORGANIZATION_SCALE_TIERS: ScaleTierDefinition[] = [
     minEmployees: 0,
     maxEmployees: 20,
     pricing: {
-      base: 299,
-      leave: 99,
-      live_tracking: 199,
-      payroll: 149,
+      base: 499,
+      leave: 149,
+      live_tracking: 249,
+      payroll: 199,
     },
   },
   {
@@ -37,10 +37,10 @@ export const ORGANIZATION_SCALE_TIERS: ScaleTierDefinition[] = [
     minEmployees: 21,
     maxEmployees: 100,
     pricing: {
-      base: 699,
-      leave: 229,
-      live_tracking: 449,
-      payroll: 349,
+      base: 799,
+      leave: 149,
+      live_tracking: 249,
+      payroll: 199,
     },
   },
   {
@@ -50,10 +50,10 @@ export const ORGANIZATION_SCALE_TIERS: ScaleTierDefinition[] = [
     minEmployees: 101,
     maxEmployees: null,
     pricing: {
-      base: 1299,
-      leave: 399,
-      live_tracking: 799,
-      payroll: 599,
+      base: 1099,
+      leave: 149,
+      live_tracking: 249,
+      payroll: 199,
     },
   },
 ];

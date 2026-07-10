@@ -8,15 +8,13 @@ import type { Request } from 'express';
 import { getMongoDb } from '../../database/mongo';
 import {
   confirmApprovedDays,
-  ensureBalancesForUser,
   isBalanceLeaveType,
   releasePendingDays,
   reservePendingDays,
 } from '../employees/leave-balances.store';
-import {
-  countLeaveDays,
-  leavePeriodYear,
-} from '../employees/leave-days.util';
+import { countLeaveDays, todayDateString } from '../employees/leave-days.util';
+import { prepareEmployeeLeaveBalances, resolveLeavePeriodForRequest } from './leave-balance.context';
+import { resolveLeaveEligibility } from './leave-eligibility.util';
 import { WorkforceContextService } from '../workforce-context.service';
 import { BillingService } from '../../billing/billing.service';
 import {
@@ -110,15 +108,31 @@ export class LeaveService {
     }
 
     const requestedDays = countLeaveDays(input.startDate, input.endDate);
-    const periodYear = leavePeriodYear(input.startDate);
+    const { period, policy, hireDate } = await resolveLeavePeriodForRequest({
+      organizationId: context.organizationId,
+      userId: context.userId,
+      startDate: input.startDate,
+    });
 
     if (isBalanceLeaveType(input.leaveType)) {
-      await ensureBalancesForUser({
+      const eligibility = resolveLeaveEligibility({
+        policy,
+        hireDate,
+        asOfDate: todayDateString(),
+      });
+
+      if (!eligibility.eligible) {
+        throw new BadRequestException(
+          `You are not yet eligible for paid leave. ${eligibility.tenureMonthsRequired} month(s) of service are required.`,
+        );
+      }
+
+      await prepareEmployeeLeaveBalances({
         organizationId: context.organizationId,
         userId: context.userId,
         memberId: context.memberId,
         branchId: context.branchId!,
-        periodYear,
+        referenceDate: input.startDate,
       });
 
       try {
@@ -126,7 +140,7 @@ export class LeaveService {
           organizationId: context.organizationId,
           userId: context.userId,
           leaveType: input.leaveType,
-          periodYear,
+          periodKey: period.periodKey,
           days: requestedDays,
         });
       } catch (error) {
@@ -159,7 +173,7 @@ export class LeaveService {
           organizationId: context.organizationId,
           userId: context.userId,
           leaveType: input.leaveType,
-          periodYear,
+          periodKey: period.periodKey,
           days: requestedDays,
         });
       }
@@ -250,7 +264,11 @@ export class LeaveService {
       leaveRequest.startDate,
       leaveRequest.endDate,
     );
-    const periodYear = leavePeriodYear(leaveRequest.startDate);
+    const { period } = await resolveLeavePeriodForRequest({
+      organizationId: leaveRequest.organizationId,
+      userId: leaveRequest.userId,
+      startDate: leaveRequest.startDate,
+    });
 
     const updated = await updateLeaveRequestStatus({
       id,
@@ -269,7 +287,7 @@ export class LeaveService {
           organizationId: leaveRequest.organizationId,
           userId: leaveRequest.userId,
           leaveType: leaveRequest.leaveType,
-          periodYear,
+          periodKey: period.periodKey,
           days: requestedDays,
         });
       } else {
@@ -277,7 +295,7 @@ export class LeaveService {
           organizationId: leaveRequest.organizationId,
           userId: leaveRequest.userId,
           leaveType: leaveRequest.leaveType,
-          periodYear,
+          periodKey: period.periodKey,
           days: requestedDays,
         });
       }
@@ -307,7 +325,11 @@ export class LeaveService {
       leaveRequest.startDate,
       leaveRequest.endDate,
     );
-    const periodYear = leavePeriodYear(leaveRequest.startDate);
+    const { period } = await resolveLeavePeriodForRequest({
+      organizationId: leaveRequest.organizationId,
+      userId: leaveRequest.userId,
+      startDate: leaveRequest.startDate,
+    });
 
     const updated = await updateLeaveRequestStatus({
       id,
@@ -324,7 +346,7 @@ export class LeaveService {
         organizationId: leaveRequest.organizationId,
         userId: leaveRequest.userId,
         leaveType: leaveRequest.leaveType,
-        periodYear,
+        periodKey: period.periodKey,
         days: requestedDays,
       });
     }

@@ -12,6 +12,6 @@ import { WorkforceContextService } from '../workforce/workforce-context.service'
     SubscriptionInquiriesService,
     WorkforceContextService,
   ],
-  exports: [BillingService],
+  exports: [BillingService, OrganizationScaleService],
 })
 export class BillingModule {}

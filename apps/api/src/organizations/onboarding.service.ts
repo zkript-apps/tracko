@@ -10,6 +10,7 @@ import type {
   CompleteOnboardingInput,
   OnboardingStatus,
 } from './organization.types';
+import { normalizeOrgBranding } from './org-branding.types';
 
 type OrganizationRecord = {
   id: string;
@@ -87,6 +88,7 @@ export class OnboardingService {
 
   async complete(headers: HeadersInit, input: CompleteOnboardingInput) {
     const slug = input.slug?.trim() || slugifyOrganizationName(input.name);
+    const branding = normalizeOrgBranding(input.branding);
 
     const organization = await this.authService.api.createOrganization({
       headers,
@@ -98,6 +100,9 @@ export class OnboardingService {
         address: input.address?.trim(),
         city: input.city?.trim(),
         phone: input.phone?.trim(),
+        primaryColor: branding.primaryColor,
+        secondaryColor: branding.secondaryColor,
+        accentColor: branding.accentColor,
         onboardingCompleted: true,
       },
     });

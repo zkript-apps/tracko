@@ -12,7 +12,7 @@ import {
 } from '../org-invitations/org-invitations.store';
 import { createBranchAssignment } from '../organizations/branch-assignments.store';
 import { createEmployeeProfile } from '../workforce/employees/employee-profiles.store';
-import { ensureBalancesForUser } from '../workforce/employees/leave-balances.store';
+import { prepareEmployeeLeaveBalances } from '../workforce/leave/leave-balance.context';
 import { todayDateString } from '../workforce/employees/leave-days.util';
 import { buildAcceptInviteUrl } from '../org-invitations/invite-url';
 import { sendOrgInvitationEmail } from '../email/email.client';
@@ -83,6 +83,12 @@ export async function createAuth() {
           required: false,
           defaultValue: 'org_admin',
           input: false,
+        },
+        themeMode: {
+          type: 'string',
+          required: false,
+          defaultValue: 'dark',
+          input: true,
         },
       },
     },
@@ -278,12 +284,11 @@ export async function createAuth() {
                 contractStartDate: today,
               });
 
-              await ensureBalancesForUser({
+              await prepareEmployeeLeaveBalances({
                 organizationId: String(invitation.organizationId),
                 userId: user.id,
                 memberId: member.id,
                 branchId,
-                periodYear: new Date().getFullYear(),
               });
             }
           },
@@ -296,6 +301,12 @@ export async function createAuth() {
               address: { type: 'string', required: false },
               city: { type: 'string', required: false },
               phone: { type: 'string', required: false },
+              description: { type: 'string', required: false },
+              website: { type: 'string', required: false },
+              primaryColor: { type: 'string', required: false },
+              secondaryColor: { type: 'string', required: false },
+              accentColor: { type: 'string', required: false },
+              logoFileName: { type: 'string', required: false },
               onboardingCompleted: {
                 type: 'boolean',
                 required: false,

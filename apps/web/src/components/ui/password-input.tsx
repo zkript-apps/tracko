@@ -48,7 +48,7 @@ export function PasswordInput({ className, ...props }: PasswordInputProps) {
         {...props}
         type={visible ? 'text' : 'password'}
         className={cn(
-          'tracko-password-input w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-3 pr-10 text-white outline-none ring-emerald-500 focus:ring-2 disabled:opacity-60',
+          'tracko-password-input w-full rounded-lg border border-border bg-background py-2 pl-3 pr-10 text-foreground outline-none ring-ring focus:ring-2 disabled:opacity-60',
           className,
         )}
       />
@@ -57,7 +57,7 @@ export function PasswordInput({ className, ...props }: PasswordInputProps) {
         tabIndex={-1}
         onClick={() => setVisible((current) => !current)}
         aria-label={visible ? 'Hide password' : 'Show password'}
-        className="absolute inset-y-0 right-0 flex items-center px-3 text-emerald-400 transition hover:text-emerald-300"
+        className="absolute inset-y-0 right-0 flex items-center px-3 text-primary transition hover:opacity-80"
       >
         {visible ? (
           <EyeOffIcon className="h-4 w-4" />

@@ -69,6 +69,9 @@ export default function EmployeesPage() {
     [team],
   );
 
+  const canInvite = team?.scaleCapacity?.canInvite !== false;
+  const scaleCapacity = team?.scaleCapacity;
+
   const branchEmployees = useMemo(() => {
     if (!memberBranchFilter) {
       return [];
@@ -232,8 +235,42 @@ export default function EmployeesPage() {
               : `Invite employees to ${inviteBranch?.name ?? 'your assigned branch'}. They will use the mobile app after signing up.`}
           </p>
 
+          {scaleCapacity && scaleCapacity.maxEmployees != null ? (
+            <p className="mt-3 text-sm text-slate-400">
+              {scaleCapacity.employeeCount + scaleCapacity.pendingInvites} of{' '}
+              {scaleCapacity.maxEmployees} {scaleCapacity.scaleTierLabel} scale
+              seats used
+              {scaleCapacity.pendingInvites > 0
+                ? ` (${scaleCapacity.pendingInvites} pending invite${
+                    scaleCapacity.pendingInvites === 1 ? '' : 's'
+                  })`
+                : ''}
+              .
+              {!canInvite ? (
+                <>
+                  {' '}
+                  <Link
+                    href="/dashboard/settings/subscription"
+                    className="text-emerald-400 underline-offset-2 hover:underline"
+                  >
+                    Upgrade scale
+                  </Link>{' '}
+                  to invite more.
+                </>
+              ) : null}
+            </p>
+          ) : null}
+
+          {!canInvite ? (
+            <p className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+              This organization is at its {scaleCapacity?.scaleTierLabel ?? ''}{' '}
+              scale limit. New employees cannot be invited until you upgrade
+              scale.
+            </p>
+          ) : null}
+
           <form
-            className={`mt-6 grid gap-4 ${isAdmin ? 'md:grid-cols-[1fr_1fr_auto]' : 'md:grid-cols-[1fr_auto]'}`}
+            className={`mt-6 grid gap-4 md:items-end ${isAdmin ? 'md:grid-cols-[1fr_1fr_auto]' : 'md:grid-cols-[1fr_auto]'}`}
             onSubmit={handleInvite}
           >
             <label className="block space-y-2">
@@ -243,7 +280,7 @@ export default function EmployeesPage() {
                 required
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                disabled={loading}
+                disabled={loading || !canInvite}
                 className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2 disabled:opacity-60"
                 placeholder="employee@company.com"
               />
@@ -256,7 +293,7 @@ export default function EmployeesPage() {
                   required
                   value={branchId}
                   onChange={(event) => setBranchId(event.target.value)}
-                  disabled={loading}
+                  disabled={loading || !canInvite}
                   className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2 disabled:opacity-60"
                 >
                   {team.branches.map((branch) => (
@@ -269,16 +306,15 @@ export default function EmployeesPage() {
               </label>
             ) : null}
 
-            <div className="flex items-end">
-              <LoadingButton
-                type="submit"
-                loading={loading}
-                loadingText="Sending…"
-                className="w-full rounded-lg bg-emerald-500 px-4 py-2.5 font-medium text-slate-950 transition hover:bg-emerald-400 md:w-auto"
-              >
-                Send invitation
-              </LoadingButton>
-            </div>
+            <LoadingButton
+              type="submit"
+              loading={loading}
+              loadingText="Sending…"
+              disabled={!canInvite}
+              className="h-[42px] w-full rounded-lg bg-emerald-500 px-4 font-medium text-slate-950 transition hover:bg-emerald-400 md:w-auto"
+            >
+              Send invitation
+            </LoadingButton>
           </form>
         </section>
 

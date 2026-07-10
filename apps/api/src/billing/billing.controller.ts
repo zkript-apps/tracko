@@ -9,6 +9,10 @@ class ScheduleFeatureChangeDto {
   action!: 'add' | 'remove';
 }
 
+class ScheduleScaleChangeDto {
+  scaleTier!: string;
+}
+
 class CreateSubscriptionInquiryDto {
   companyName!: string;
   contactName!: string;
@@ -55,6 +59,14 @@ export class BillingController {
     );
   }
 
+  @Post('billing/scale')
+  scheduleScaleChange(
+    @Req() request: Request,
+    @Body() body: ScheduleScaleChangeDto,
+  ) {
+    return this.billing.scheduleScaleChange(request, body.scaleTier);
+  }
+
   @Post('billing/demo/enable-all')
   enableAllForDemo(@Req() request: Request) {
     return this.billing.enableAllFeaturesForDemo(request);
@@ -66,5 +78,10 @@ export class BillingController {
     @Param('changeId') changeId: string,
   ) {
     return this.billing.cancelPendingChange(request, changeId);
+  }
+
+  @Delete('billing/scale/pending')
+  cancelPendingScaleChange(@Req() request: Request) {
+    return this.billing.cancelPendingScaleChange(request);
   }
 }

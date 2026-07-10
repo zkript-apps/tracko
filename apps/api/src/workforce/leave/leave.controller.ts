@@ -5,13 +5,16 @@ import {
   Get,
   Param,
   Post,
+  Put,
   Query,
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { LEAVE_TYPES, type LeaveType } from './leave.store';
 import { LeaveService } from './leave.service';
+import { LeavePolicyService } from './leave-policy.service';
 import { EmployeesService } from '../employees/employees.service';
+import type { LeavePolicyInput } from './leave-policy.types';
 
 class CreateLeaveDto {
   leaveType!: LeaveType;
@@ -29,7 +32,18 @@ export class LeaveController {
   constructor(
     private readonly leave: LeaveService,
     private readonly employees: EmployeesService,
+    private readonly leavePolicy: LeavePolicyService,
   ) {}
+
+  @Get('policy')
+  getPolicy(@Req() request: Request) {
+    return this.leavePolicy.getPolicy(request);
+  }
+
+  @Put('policy')
+  updatePolicy(@Req() request: Request, @Body() body: LeavePolicyInput) {
+    return this.leavePolicy.updatePolicy(request, body);
+  }
 
   @Post('requests')
   create(@Req() request: Request, @Body() body: CreateLeaveDto) {

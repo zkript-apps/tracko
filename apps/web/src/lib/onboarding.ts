@@ -103,6 +103,11 @@ export type CompleteOnboardingInput = {
   address?: string;
   city?: string;
   phone?: string;
+  branding?: {
+    primaryColor?: string;
+    secondaryColor?: string;
+    accentColor?: string;
+  };
   branches: BranchInput[];
 };
 

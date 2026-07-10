@@ -169,6 +169,9 @@ export default function TeamPage() {
     [memberBranchFilter, team],
   );
 
+  const canInvite = team?.scaleCapacity?.canInvite !== false;
+  const scaleCapacity = team?.scaleCapacity;
+
   useEffect(() => {
     if (!team) {
       return;
@@ -293,7 +296,41 @@ export default function TeamPage() {
             employee records for that site.
           </p>
 
-          <form className="mt-6 grid gap-4 md:grid-cols-[1fr_1fr_auto]" onSubmit={handleInvite}>
+          {scaleCapacity && scaleCapacity.maxEmployees != null ? (
+            <p className="mt-3 text-sm text-slate-400">
+              {scaleCapacity.employeeCount + scaleCapacity.pendingInvites} of{' '}
+              {scaleCapacity.maxEmployees} {scaleCapacity.scaleTierLabel} scale
+              seats used
+              {scaleCapacity.pendingInvites > 0
+                ? ` (${scaleCapacity.pendingInvites} pending invite${
+                    scaleCapacity.pendingInvites === 1 ? '' : 's'
+                  })`
+                : ''}
+              .
+              {!canInvite ? (
+                <>
+                  {' '}
+                  <a
+                    href="/dashboard/settings/subscription"
+                    className="text-emerald-400 underline-offset-2 hover:underline"
+                  >
+                    Upgrade scale
+                  </a>{' '}
+                  to invite more.
+                </>
+              ) : null}
+            </p>
+          ) : null}
+
+          {!canInvite ? (
+            <p className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+              This organization is at its {scaleCapacity?.scaleTierLabel ?? ''}{' '}
+              scale limit. New HR managers cannot be invited until you upgrade
+              scale.
+            </p>
+          ) : null}
+
+          <form className="mt-6 grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end" onSubmit={handleInvite}>
             <label className="block space-y-2">
               <span className="text-sm text-slate-300">Email</span>
               <input
@@ -301,8 +338,8 @@ export default function TeamPage() {
                 required
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                disabled={loading}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-3 pr-10 text-white outline-none ring-emerald-500 focus:ring-2 disabled:opacity-60"
+                disabled={loading || !canInvite}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2 disabled:opacity-60"
                 placeholder="hr@company.com"
               />
             </label>
@@ -313,7 +350,7 @@ export default function TeamPage() {
                 required
                 value={branchId}
                 onChange={(event) => setBranchId(event.target.value)}
-                disabled={loading}
+                disabled={loading || !canInvite}
               >
                 {team.branches.map((branch) => (
                   <option key={branch._id} value={branch._id}>
@@ -325,16 +362,15 @@ export default function TeamPage() {
               </NativeSelect>
             </label>
 
-            <div className="flex items-end">
-              <LoadingButton
-                type="submit"
-                loading={loading}
-                loadingText="Sending…"
-                className="w-full rounded-lg bg-emerald-500 px-4 py-2.5 font-medium text-slate-950 transition hover:bg-emerald-400 md:w-auto"
-              >
-                Send invitation
-              </LoadingButton>
-            </div>
+            <LoadingButton
+              type="submit"
+              loading={loading}
+              loadingText="Sending…"
+              disabled={!canInvite}
+              className="h-[42px] w-full rounded-lg bg-emerald-500 px-4 font-medium text-slate-950 transition hover:bg-emerald-400 md:w-auto"
+            >
+              Send invitation
+            </LoadingButton>
           </form>
         </section>
 

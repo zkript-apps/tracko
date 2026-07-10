@@ -10,13 +10,34 @@ export type Branch = {
 };
 
 export type TeamOverview = {
-  organization: { id: string; name: string };
+  organization: {
+    id: string;
+    name: string;
+    branding?: {
+      primaryColor: string;
+      secondaryColor: string;
+      accentColor: string;
+      hasLogo: boolean;
+      logoUrl: string | null;
+    };
+  };
   currentMember: {
     role: string;
     canManageTeam: boolean;
     canInviteEmployees: boolean;
     assignedBranchId: string | null;
   } | null;
+  scaleCapacity?: {
+    employeeCount: number;
+    scaleTier: string;
+    scaleTierLabel: string;
+    maxEmployees: number | null;
+    remaining: number | null;
+    atLimit: boolean;
+    pendingInvites: number;
+    inviteSlotsRemaining: number | null;
+    canInvite: boolean;
+  };
   branches: Branch[];
   members: Array<{
     id: string;
