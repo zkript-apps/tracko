@@ -62,7 +62,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       try {
         await authClient.updateUser({
           themeMode: next,
-        } as { themeMode: ThemeMode });
+        });
       } finally {
         setIsSaving(false);
       }

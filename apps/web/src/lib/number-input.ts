@@ -24,9 +24,9 @@ export function parseIntegerInput(
 
 export function selectZeroNumberInputOnFocus(
   event: FocusEvent<HTMLInputElement>,
-  value: number | string | undefined,
+  value: number | string | readonly string[] | undefined,
 ): void {
-  const numeric = Number(value);
+  const numeric = Number(Array.isArray(value) ? value[0] : value);
 
   if (numeric === 0) {
     event.currentTarget.select();
