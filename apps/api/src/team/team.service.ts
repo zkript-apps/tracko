@@ -6,7 +6,13 @@ import {
 import { AuthService } from '@thallesp/nestjs-better-auth';
 import { fromNodeHeaders } from 'better-auth/node';
 import type { Request } from 'express';
-import { ORG_ADMIN_ROLES, HR_ROLES, resolveWorkforceRole } from '../auth/org-roles';
+import {
+  ORG_ADMIN_ROLES,
+  HR_ROLES,
+  isWorkforceStaffRole,
+  resolveWorkforceRole,
+} from '../auth/org-roles';
+import { OrganizationScaleService } from '../billing/organization-scale.service';
 import { updateEmployeeProfile } from '../workforce/employees/employee-profiles.store';
 import {
   findAssignmentByUserId,
@@ -18,13 +24,35 @@ import {
   listBranchesByOrganization,
 } from '../organizations/branches.store';
 import { buildAcceptInviteUrl } from '../org-invitations/invite-url';
+import { findOrganizationBranding } from '../organizations/org-branding.store';
+
+function countPendingWorkforceInvitations(
+  invitations: Array<{ role?: string; status?: string }> | undefined,
+): number {
+  return (invitations ?? []).filter(
+    (invitation) =>
+      invitation.status === 'pending' &&
+      isWorkforceStaffRole(invitation.role),
+  ).length;
+}
 
 @Injectable()
 export class TeamService {
   constructor(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private readonly authService: AuthService<any>,
+    private readonly organizationScale: OrganizationScaleService,
   ) {}
+
+  private async assertCanInviteWorkforceStaff(
+    organizationId: string,
+    invitations: Array<{ role?: string; status?: string }> | undefined,
+  ) {
+    await this.organizationScale.assertCanAddWorkforceStaff(
+      organizationId,
+      countPendingWorkforceInvitations(invitations),
+    );
+  }
 
   private headersFrom(request: Request) {
     return fromNodeHeaders(request.headers);
@@ -107,6 +135,21 @@ export class TeamService {
     const branches = await listBranchesByOrganization(organization.id);
     const assignments = await listAssignmentsByOrganization(organization.id);
     const branchMap = new Map(branches.map((branch) => [branch._id, branch]));
+    const scaleCapacity = await this.organizationScale.getScaleCapacity(
+      organization.id,
+    );
+    const pendingWorkforceInvites = countPendingWorkforceInvitations(
+      organization.invitations,
+    );
+    const inviteSlotsRemaining =
+      scaleCapacity.maxEmployees == null
+        ? null
+        : Math.max(
+            0,
+            scaleCapacity.maxEmployees -
+              scaleCapacity.employeeCount -
+              pendingWorkforceInvites,
+          );
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const members = (organization.members ?? []).map((member: any) => {
@@ -151,10 +194,21 @@ export class TeamService {
         };
       });
 
+    const branding = await findOrganizationBranding(organization.id);
+
     return {
       organization: {
         id: organization.id,
         name: organization.name,
+        branding: {
+          primaryColor: branding.primaryColor,
+          secondaryColor: branding.secondaryColor,
+          accentColor: branding.accentColor,
+          hasLogo: Boolean(branding.logoFileName),
+          logoUrl: branding.logoFileName
+            ? '/organization/branding/logo'
+            : null,
+        },
       },
       currentMember: activeMember
         ? {
@@ -164,6 +218,14 @@ export class TeamService {
             assignedBranchId: assignment?.branchId ?? null,
           }
         : null,
+      scaleCapacity: {
+        ...scaleCapacity,
+        pendingInvites: pendingWorkforceInvites,
+        inviteSlotsRemaining,
+        canInvite:
+          scaleCapacity.maxEmployees == null ||
+          (inviteSlotsRemaining ?? 0) > 0,
+      },
       branches,
       members,
       invitations,
@@ -198,6 +260,11 @@ export class TeamService {
     if (!branch || String(branch.organizationId) !== String(organization.id)) {
       throw new BadRequestException('Invalid branch.');
     }
+
+    await this.assertCanInviteWorkforceStaff(
+      organization.id,
+      organization.invitations,
+    );
 
     const invitation = await this.authService.api.createInvitation({
       headers,
@@ -273,6 +340,11 @@ export class TeamService {
     if (!branch || String(branch.organizationId) !== String(organization.id)) {
       throw new BadRequestException('Invalid branch.');
     }
+
+    await this.assertCanInviteWorkforceStaff(
+      organization.id,
+      organization.invitations,
+    );
 
     const invitation = await this.authService.api.createInvitation({
       headers,

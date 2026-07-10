@@ -8,8 +8,16 @@ import {
   getOnboardingStatus,
   type BranchInput,
 } from '@/lib/onboarding';
+import {
+  DEFAULT_ORG_BRANDING,
+  normalizeHexColor,
+  uploadOrgLogo,
+  type BrandingColors,
+} from '@/lib/branding';
+import { BrandingEditor } from '@/components/branding/branding-editor';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { OnboardingSkeleton } from '@/components/ui/onboarding-skeleton';
+import { isOrgAppearanceEnabled } from '@/lib/feature-flags';
 
 const industries = [
   'Retail',
@@ -49,6 +57,15 @@ export default function OnboardingPage() {
   const [branches, setBranches] = useState<BranchInput[]>([
     { ...emptyBranch(), name: 'Head Office', isHeadOffice: true },
   ]);
+  const [branding, setBranding] = useState<BrandingColors>({
+    primaryColor: DEFAULT_ORG_BRANDING.primaryColor,
+    secondaryColor: DEFAULT_ORG_BRANDING.secondaryColor,
+    accentColor: DEFAULT_ORG_BRANDING.accentColor,
+  });
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+
+  const appearanceEnabled = isOrgAppearanceEnabled();
+  const totalSteps = appearanceEnabled ? 3 : 2;
 
   useEffect(() => {
     if (isPending) {
@@ -87,7 +104,9 @@ export default function OnboardingPage() {
   }
 
   function removeBranch(index: number) {
-    setBranches((current) => current.filter((_, branchIndex) => branchIndex !== index));
+    setBranches((current) =>
+      current.filter((_, branchIndex) => branchIndex !== index),
+    );
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -104,7 +123,34 @@ export default function OnboardingPage() {
         city,
         phone,
         branches,
+        ...(appearanceEnabled
+          ? {
+              branding: {
+                primaryColor: normalizeHexColor(
+                  branding.primaryColor,
+                  DEFAULT_ORG_BRANDING.primaryColor,
+                ),
+                secondaryColor: normalizeHexColor(
+                  branding.secondaryColor,
+                  DEFAULT_ORG_BRANDING.secondaryColor,
+                ),
+                accentColor: normalizeHexColor(
+                  branding.accentColor,
+                  DEFAULT_ORG_BRANDING.accentColor,
+                ),
+              },
+            }
+          : {}),
       });
+
+      if (appearanceEnabled && logoFile) {
+        try {
+          await uploadOrgLogo(logoFile);
+        } catch {
+          // Org is created; logo can be uploaded later from settings.
+        }
+      }
+
       router.push('/dashboard');
       router.refresh();
     } catch (submitError) {
@@ -123,44 +169,49 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background px-4 py-12 text-slate-100">
-      <div className="mx-auto max-w-2xl">
+    <div className="min-h-screen bg-background px-4 py-12 text-foreground">
+      <div className="mx-auto max-w-3xl">
         <div className="mb-8 space-y-2 text-center">
-          <p className="text-sm font-medium uppercase tracking-[0.2em] text-emerald-400">
+          <p className="text-sm font-medium uppercase tracking-[0.2em] text-primary">
             Organization setup
           </p>
-          <h1 className="text-3xl font-semibold text-white">
+          <h1 className="text-3xl font-semibold text-foreground">
             Set up {session?.user.name.split(' ')[0]}&apos;s company
           </h1>
-          <p className="text-sm text-slate-400">
-            Step {step} of 2 — tell us about your organization and branches.
+          <p className="text-sm text-muted-foreground">
+            Step {step} of {totalSteps} —{' '}
+            {appearanceEnabled
+              ? 'organization details, branches, then branding.'
+              : 'tell us about your organization and branches.'}
           </p>
         </div>
 
         <form
           onSubmit={handleSubmit}
-          className="rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-xl"
+          className="rounded-2xl border border-border bg-card p-8 shadow-xl"
         >
           {step === 1 ? (
             <div className="space-y-4">
               <label className="block space-y-2">
-                <span className="text-sm text-slate-300">Organization name</span>
+                <span className="text-sm text-muted-foreground">
+                  Organization name
+                </span>
                 <input
                   required
                   value={name}
                   onChange={(event) => setName(event.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground outline-none ring-ring focus:ring-2"
                   placeholder="Acme Logistics Inc."
                 />
               </label>
 
               <label className="block space-y-2">
-                <span className="text-sm text-slate-300">Industry</span>
+                <span className="text-sm text-muted-foreground">Industry</span>
                 <select
                   required
                   value={industry}
                   onChange={(event) => setIndustry(event.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground outline-none ring-ring focus:ring-2"
                 >
                   <option value="">Select industry</option>
                   {industries.map((option) => (
@@ -172,11 +223,11 @@ export default function OnboardingPage() {
               </label>
 
               <label className="block space-y-2">
-                <span className="text-sm text-slate-300">Timezone</span>
+                <span className="text-sm text-muted-foreground">Timezone</span>
                 <select
                   value={timezone}
                   onChange={(event) => setTimezone(event.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground outline-none ring-ring focus:ring-2"
                 >
                   {timezones.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -188,32 +239,34 @@ export default function OnboardingPage() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block space-y-2">
-                  <span className="text-sm text-slate-300">City</span>
+                  <span className="text-sm text-muted-foreground">City</span>
                   <input
                     value={city}
                     onChange={(event) => setCity(event.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground outline-none ring-ring focus:ring-2"
                     placeholder="Quezon City"
                   />
                 </label>
 
                 <label className="block space-y-2">
-                  <span className="text-sm text-slate-300">Phone</span>
+                  <span className="text-sm text-muted-foreground">Phone</span>
                   <input
                     value={phone}
                     onChange={(event) => setPhone(event.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground outline-none ring-ring focus:ring-2"
                     placeholder="+63 912 345 6789"
                   />
                 </label>
               </div>
 
               <label className="block space-y-2">
-                <span className="text-sm text-slate-300">Head office address</span>
+                <span className="text-sm text-muted-foreground">
+                  Head office address
+                </span>
                 <input
                   value={address}
                   onChange={(event) => setAddress(event.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground outline-none ring-ring focus:ring-2"
                   placeholder="123 Main Street, Barangay Example"
                 />
               </label>
@@ -222,16 +275,18 @@ export default function OnboardingPage() {
                 type="button"
                 onClick={() => setStep(2)}
                 disabled={!name.trim() || !industry}
-                className="w-full rounded-lg bg-emerald-500 px-4 py-2.5 font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Continue to branches
               </button>
             </div>
-          ) : (
+          ) : null}
+
+          {step === 2 ? (
             <div className="space-y-5">
               <div className="space-y-2">
-                <h2 className="text-lg font-medium text-white">Branches</h2>
-                <p className="text-sm text-slate-400">
+                <h2 className="text-lg font-medium text-foreground">Branches</h2>
+                <p className="text-sm text-muted-foreground">
                   Add each office or site your organization operates. HR users
                   will be assigned to oversee specific branches later.
                 </p>
@@ -240,17 +295,17 @@ export default function OnboardingPage() {
               {branches.map((branch, index) => (
                 <div
                   key={index}
-                  className="space-y-3 rounded-xl border border-slate-800 bg-slate-950 p-4"
+                  className="space-y-3 rounded-xl border border-border bg-background p-4"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium text-slate-200">
+                    <p className="text-sm font-medium text-foreground">
                       Branch {index + 1}
                     </p>
                     {branches.length > 1 ? (
                       <button
                         type="button"
                         onClick={() => removeBranch(index)}
-                        className="text-xs text-red-300 hover:underline"
+                        className="text-xs text-destructive hover:underline"
                       >
                         Remove
                       </button>
@@ -263,7 +318,7 @@ export default function OnboardingPage() {
                     onChange={(event) =>
                       updateBranch(index, { name: event.target.value })
                     }
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground outline-none ring-ring focus:ring-2"
                     placeholder="Branch name"
                   />
 
@@ -273,7 +328,7 @@ export default function OnboardingPage() {
                       onChange={(event) =>
                         updateBranch(index, { city: event.target.value })
                       }
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                      className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground outline-none ring-ring focus:ring-2"
                       placeholder="City"
                     />
                     <input
@@ -281,19 +336,21 @@ export default function OnboardingPage() {
                       onChange={(event) =>
                         updateBranch(index, { address: event.target.value })
                       }
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                      className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground outline-none ring-ring focus:ring-2"
                       placeholder="Address"
                     />
                   </div>
 
-                  <label className="flex items-center gap-2 text-sm text-slate-300">
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground">
                     <input
                       type="checkbox"
                       checked={Boolean(branch.isHeadOffice)}
                       onChange={(event) =>
-                        updateBranch(index, { isHeadOffice: event.target.checked })
+                        updateBranch(index, {
+                          isHeadOffice: event.target.checked,
+                        })
                       }
-                      className="rounded border-slate-600"
+                      className="rounded border-border"
                     />
                     Head office
                   </label>
@@ -303,13 +360,13 @@ export default function OnboardingPage() {
               <button
                 type="button"
                 onClick={addBranch}
-                className="w-full rounded-lg border border-dashed border-slate-700 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
+                className="w-full rounded-lg border border-dashed border-border px-4 py-2 text-sm text-muted-foreground transition hover:border-primary hover:text-foreground"
               >
                 + Add another branch
               </button>
 
-              {error ? (
-                <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              {!appearanceEnabled && error ? (
+                <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
                   {error}
                 </p>
               ) : null}
@@ -318,7 +375,61 @@ export default function OnboardingPage() {
                 <button
                   type="button"
                   onClick={() => setStep(1)}
-                  className="rounded-lg border border-slate-700 px-4 py-2.5 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
+                  className="rounded-lg border border-border px-4 py-2.5 text-sm text-muted-foreground transition hover:text-foreground"
+                >
+                  Back
+                </button>
+                {appearanceEnabled ? (
+                  <button
+                    type="button"
+                    onClick={() => setStep(3)}
+                    className="flex-1 rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground transition hover:opacity-90"
+                  >
+                    Continue to appearance
+                  </button>
+                ) : (
+                  <LoadingButton
+                    type="submit"
+                    loading={loading}
+                    loadingText="Creating organization…"
+                    className="flex-1"
+                  >
+                    Finish setup
+                  </LoadingButton>
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          {appearanceEnabled && step === 3 ? (
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <h2 className="text-lg font-medium text-foreground">
+                  Appearance
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Choose your brand colors and logo. The dashboard UI will use
+                  these across backgrounds, buttons, and borders.
+                </p>
+              </div>
+
+              <BrandingEditor
+                value={branding}
+                onChange={setBranding}
+                onLogoFileChange={setLogoFile}
+              />
+
+              {error ? (
+                <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {error}
+                </p>
+              ) : null}
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setStep(2)}
+                  className="rounded-lg border border-border px-4 py-2.5 text-sm text-muted-foreground transition hover:text-foreground"
                 >
                   Back
                 </button>
@@ -326,13 +437,13 @@ export default function OnboardingPage() {
                   type="submit"
                   loading={loading}
                   loadingText="Creating organization…"
-                  className="flex-1 rounded-lg bg-emerald-500 px-4 py-2.5 font-medium text-slate-950 transition hover:bg-emerald-400"
+                  className="flex-1"
                 >
                   Finish setup
                 </LoadingButton>
               </div>
             </div>
-          )}
+          ) : null}
         </form>
       </div>
     </div>

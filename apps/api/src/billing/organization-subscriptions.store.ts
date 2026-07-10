@@ -1,6 +1,7 @@
 import { randomBytes } from 'crypto';
 import { getMongoDb } from '../database/mongo';
 import type { BillableFeatureId } from './feature-catalog';
+import type { OrganizationScaleTier } from './organization-scale';
 
 export type SubscriptionChangeAction = 'add' | 'remove';
 
@@ -13,12 +14,22 @@ export interface PendingSubscriptionChange {
   requestedByUserId: string;
 }
 
+export interface PendingScaleChange {
+  id: string;
+  scaleTier: OrganizationScaleTier;
+  effectiveAt: Date;
+  requestedAt: Date;
+  requestedByUserId: string;
+}
+
 export interface OrganizationSubscription {
   _id: string;
   organizationId: string;
   currency: 'PHP';
+  scaleTier: OrganizationScaleTier;
   activeFeatures: BillableFeatureId[];
   pendingChanges: PendingSubscriptionChange[];
+  pendingScaleChange: PendingScaleChange | null;
   status: 'active' | 'cancelled';
   createdAt: Date;
   updatedAt: Date;
@@ -42,14 +53,35 @@ export async function ensureSubscriptionIndexes(): Promise<void> {
 
 export async function findSubscriptionByOrganizationId(
   organizationId: string,
-): Promise<OrganizationSubscription | null> {
+): Promise<
+  | (OrganizationSubscription & { hasStoredScaleTier: boolean })
+  | null
+> {
   const collection = await getCollection();
-  return collection.findOne({ organizationId: String(organizationId) });
+  const subscription = await collection.findOne({
+    organizationId: String(organizationId),
+  });
+
+  if (!subscription) {
+    return null;
+  }
+
+  const hasStoredScaleTier =
+    typeof subscription.scaleTier === 'string' &&
+    subscription.scaleTier.length > 0;
+
+  return {
+    ...subscription,
+    scaleTier: subscription.scaleTier ?? 'small',
+    pendingScaleChange: subscription.pendingScaleChange ?? null,
+    hasStoredScaleTier,
+  };
 }
 
 export async function createOrganizationSubscription(input: {
   organizationId: string;
   activeFeatures?: BillableFeatureId[];
+  scaleTier?: OrganizationScaleTier;
 }): Promise<OrganizationSubscription> {
   await ensureSubscriptionIndexes();
   const collection = await getCollection();
@@ -58,8 +90,10 @@ export async function createOrganizationSubscription(input: {
     _id: createId(),
     organizationId: String(input.organizationId),
     currency: 'PHP',
+    scaleTier: input.scaleTier ?? 'small',
     activeFeatures: input.activeFeatures ?? [],
     pendingChanges: [],
+    pendingScaleChange: null,
     status: 'active',
     createdAt: now,
     updatedAt: now,
@@ -78,8 +112,10 @@ export async function saveOrganizationSubscription(
     { _id: subscription._id },
     {
       $set: {
+        scaleTier: subscription.scaleTier,
         activeFeatures: subscription.activeFeatures,
         pendingChanges: subscription.pendingChanges,
+        pendingScaleChange: subscription.pendingScaleChange,
         status: subscription.status,
         updatedAt,
       },

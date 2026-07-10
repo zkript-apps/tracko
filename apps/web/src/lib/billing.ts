@@ -35,6 +35,15 @@ export type PendingSubscriptionChange = {
   requestedAt: string;
 };
 
+export type PendingScaleChange = {
+  id: string;
+  scaleTier: OrganizationScaleTier;
+  scaleTierLabel: string;
+  effectiveAt: string;
+  effectiveDateLabel: string;
+  requestedAt: string;
+};
+
 export type OrganizationSubscription = {
   organizationId: string;
   currency: 'PHP';
@@ -48,6 +57,7 @@ export type OrganizationSubscription = {
   features: FeatureCatalogEntry[];
   activeFeatures: BillableFeatureId[];
   pendingChanges: PendingSubscriptionChange[];
+  pendingScaleChange: PendingScaleChange | null;
   nextChangeEffectiveAt: string;
   nextChangeEffectiveDateLabel: string;
   currentMonthlyTotalPhp: number;
@@ -81,7 +91,7 @@ export const ORGANIZATION_SCALE_TIERS: ScaleTierDefinition[] = [
     employeeRange: 'Up to 20 employees',
     minEmployees: 0,
     maxEmployees: 20,
-    pricing: { base: 299, leave: 99, live_tracking: 199, payroll: 149 },
+    pricing: { base: 499, leave: 149, live_tracking: 249, payroll: 199 },
   },
   {
     id: 'medium',
@@ -89,7 +99,7 @@ export const ORGANIZATION_SCALE_TIERS: ScaleTierDefinition[] = [
     employeeRange: '21–100 employees',
     minEmployees: 21,
     maxEmployees: 100,
-    pricing: { base: 699, leave: 229, live_tracking: 449, payroll: 349 },
+    pricing: { base: 799, leave: 149, live_tracking: 249, payroll: 199 },
   },
   {
     id: 'enterprise',
@@ -97,7 +107,7 @@ export const ORGANIZATION_SCALE_TIERS: ScaleTierDefinition[] = [
     employeeRange: '101+ employees',
     minEmployees: 101,
     maxEmployees: null,
-    pricing: { base: 1299, leave: 399, live_tracking: 799, payroll: 599 },
+    pricing: { base: 1099, leave: 149, live_tracking: 249, payroll: 199 },
   },
 ];
 
@@ -208,10 +218,25 @@ export async function scheduleSubscriptionFeatureChange(input: {
   });
 }
 
+export async function scheduleSubscriptionScaleChange(
+  scaleTier: OrganizationScaleTier,
+): Promise<OrganizationSubscription> {
+  return apiFetch('/billing/scale', {
+    method: 'POST',
+    body: JSON.stringify({ scaleTier }),
+  });
+}
+
 export async function cancelPendingSubscriptionChange(
   changeId: string,
 ): Promise<OrganizationSubscription> {
   return apiFetch(`/billing/features/pending/${encodeURIComponent(changeId)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function cancelPendingSubscriptionScaleChange(): Promise<OrganizationSubscription> {
+  return apiFetch('/billing/scale/pending', {
     method: 'DELETE',
   });
 }

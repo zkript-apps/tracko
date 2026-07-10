@@ -54,7 +54,44 @@
 :root {
   --radius: 0.625rem;
 
-  /* Always-dark Tracko palette (slate + emerald) */
+  /* Light palette */
+  --background: oklch(0.985 0.005 250);
+  --foreground: oklch(0.18 0.02 260);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.02 260);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.02 260);
+  --primary: oklch(0.55 0.14 160);
+  --primary-foreground: oklch(0.99 0.005 160);
+  --secondary: oklch(0.94 0.01 250);
+  --secondary-foreground: oklch(0.25 0.02 260);
+  --muted: oklch(0.94 0.01 250);
+  --muted-foreground: oklch(0.45 0.02 250);
+  --accent: oklch(0.94 0.01 250);
+  --accent-foreground: oklch(0.25 0.02 260);
+  --destructive: oklch(0.55 0.2 25);
+  --border: oklch(0.88 0.01 260);
+  --input: oklch(0.94 0.01 250);
+  --ring: oklch(0.55 0.14 160);
+  --chart-1: oklch(0.55 0.14 160);
+  --chart-2: oklch(0.55 0.12 220);
+  --chart-3: oklch(0.65 0.14 80);
+  --chart-4: oklch(0.55 0.2 25);
+  --chart-5: oklch(0.55 0.15 300);
+  --sidebar: oklch(0.97 0.005 250);
+  --sidebar-foreground: oklch(0.18 0.02 260);
+  --sidebar-primary: oklch(0.55 0.14 160);
+  --sidebar-primary-foreground: oklch(0.99 0.005 160);
+  --sidebar-accent: oklch(0.94 0.01 250);
+  --sidebar-accent-foreground: oklch(0.25 0.02 260);
+  --sidebar-border: oklch(0.88 0.01 260);
+  --sidebar-ring: oklch(0.55 0.14 160);
+  --skeleton: oklch(0.9 0.01 250);
+  --skeleton-shine: oklch(0.55 0.14 160 / 0.18);
+}
+
+.dark {
+  /* Default Tracko palette (slate + emerald) */
   --background: oklch(0.13 0.02 260);
   --foreground: oklch(0.98 0.005 250);
   --card: oklch(0.18 0.02 260);
@@ -86,6 +123,8 @@
   --sidebar-accent-foreground: oklch(0.98 0.005 250);
   --sidebar-border: oklch(0.32 0.02 260);
   --sidebar-ring: oklch(0.72 0.15 160);
+  --skeleton: oklch(0.24 0.02 260);
+  --skeleton-shine: oklch(0.72 0.15 160 / 0.2);
 }
 
 @theme inline {
@@ -206,7 +245,7 @@
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(255, 255, 255, 0.06),
+    var(--skeleton-shine, rgba(255, 255, 255, 0.06)),
     transparent
   );
   animation: shimmer 1.5s infinite;

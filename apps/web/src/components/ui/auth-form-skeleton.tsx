@@ -2,11 +2,11 @@ import { Skeleton } from './skeleton';
 
 export function AuthFormSkeleton() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-12">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
       <div
         aria-busy
         aria-label="Loading form"
-        className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-xl"
+        className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-xl"
       >
         <div className="mb-8 space-y-3 text-center">
           <Skeleton className="mx-auto h-3 w-24" />

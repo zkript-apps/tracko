@@ -9,7 +9,7 @@ export function Skeleton({ className }: SkeletonProps) {
     <div
       aria-hidden
       className={cn(
-        'skeleton-shimmer animate-pulse rounded-lg bg-slate-800/80',
+        'skeleton-shimmer animate-pulse rounded-lg bg-[var(--skeleton,var(--muted))]',
         className,
       )}
     />

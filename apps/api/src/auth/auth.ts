@@ -84,6 +84,12 @@ export async function createAuth() {
           defaultValue: 'org_admin',
           input: false,
         },
+        themeMode: {
+          type: 'string',
+          required: false,
+          defaultValue: 'dark',
+          input: true,
+        },
       },
     },
     experimental: {
@@ -295,6 +301,12 @@ export async function createAuth() {
               address: { type: 'string', required: false },
               city: { type: 'string', required: false },
               phone: { type: 'string', required: false },
+              description: { type: 'string', required: false },
+              website: { type: 'string', required: false },
+              primaryColor: { type: 'string', required: false },
+              secondaryColor: { type: 'string', required: false },
+              accentColor: { type: 'string', required: false },
+              logoFileName: { type: 'string', required: false },
               onboardingCompleted: {
                 type: 'boolean',
                 required: false,

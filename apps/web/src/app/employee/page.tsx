@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Fingerprint, ShieldCheck } from 'lucide-react';
+import { Fingerprint, Moon, ShieldCheck, Sun } from 'lucide-react';
 import { toast } from 'sonner';
 import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
 import { DateInput } from '@/components/ui/date-input';
@@ -41,6 +41,7 @@ import {
 import { getOnboardingStatus } from '@/lib/onboarding';
 import { formatOrgRole, isHrRole } from '@/lib/org-roles';
 import { getAnnouncements, type Announcement } from '@/lib/announcements';
+import { useThemeMode } from '@/components/theme/theme-provider';
 import {
   cancelLeaveRequest,
   createLeaveRequest,
@@ -60,11 +61,12 @@ import { getTeamOverview, type TeamOverview } from '@/lib/team';
 const LOCATION_POST_INTERVAL_MS = 60_000;
 
 const employeeDateInputClassName =
-  'h-auto border-slate-700 bg-slate-950 px-3 py-2 text-white focus-visible:ring-emerald-500 dark:bg-slate-950';
+  'h-auto border-border bg-background px-3 py-2 text-foreground focus-visible:ring-ring';
 
 export default function EmployeePage() {
   const router = useRouter();
   const { data: session, isPending } = useSession();
+  const { themeMode, setThemeMode } = useThemeMode();
   const [team, setTeam] = useState<TeamOverview | null>(null);
   const [attendance, setAttendance] = useState<AttendanceStatus | null>(null);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
@@ -461,11 +463,11 @@ export default function EmployeePage() {
   const isHr = isHrRole(currentRole);
 
   return (
-    <div className="min-h-screen bg-background text-slate-100">
-      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur">
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="border-b border-border bg-card/80 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-6 py-4">
           <div>
-            <p className="text-xs uppercase tracking-[0.25em] text-emerald-400">
+            <p className="text-xs uppercase tracking-[0.25em] text-primary">
               Tracko
             </p>
             <h1 className="text-lg font-semibold">
@@ -473,17 +475,33 @@ export default function EmployeePage() {
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                void setThemeMode(themeMode === 'dark' ? 'light' : 'dark')
+              }
+              className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground transition hover:border-muted-foreground hover:text-foreground"
+              aria-label={
+                themeMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+              }
+            >
+              {themeMode === 'dark' ? (
+                <Sun className="size-4" />
+              ) : (
+                <Moon className="size-4" />
+              )}
+            </button>
             {isHr ? (
               <Link
                 href="/dashboard"
-                className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
+                className="rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground transition hover:border-muted-foreground hover:text-foreground"
               >
                 HR dashboard
               </Link>
             ) : null}
             <button
               onClick={handleSignOut}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-500 hover:text-white"
+              className="rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground transition hover:border-muted-foreground hover:text-foreground"
             >
               Sign out
             </button>
@@ -492,24 +510,24 @@ export default function EmployeePage() {
       </header>
 
       <main className="mx-auto max-w-3xl space-y-8 px-6 py-10">
-        <section className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-6">
-          <p className="text-xs uppercase tracking-[0.2em] text-emerald-300/80">
+        <section className="rounded-2xl border border-border bg-primary/10 p-6">
+          <p className="text-xs uppercase tracking-[0.2em] text-primary/80">
             {formatOrgRole(currentRole)}
           </p>
-          <h2 className="mt-2 text-xl font-semibold text-white">
+          <h2 className="mt-2 text-xl font-semibold text-foreground">
             Welcome, {session.user.name}
           </h2>
-          <p className="mt-2 text-slate-300">
+          <p className="mt-2 text-muted-foreground">
             {team.organization.name}
             {branchLabel ? ` · ${branchLabel}` : ''}
           </p>
         </section>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+        <section className="rounded-2xl border border-border bg-card p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-white">Announcements</h2>
-              <p className="mt-2 text-sm text-slate-400">
+              <h2 className="text-lg font-semibold text-foreground">Announcements</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
                 Latest updates from your HR and admin team.
               </p>
             </div>
@@ -517,21 +535,21 @@ export default function EmployeePage() {
 
           <div className="mt-6 space-y-3">
             {announcements.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-slate-800 px-3 py-4 text-sm text-slate-500">
+              <p className="rounded-lg border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
                 No announcements yet.
               </p>
             ) : (
               announcements.map((announcement) => (
                 <article
                   key={announcement.id}
-                  className="rounded-xl border border-slate-800 bg-slate-950 p-4"
+                  className="rounded-xl border border-border bg-background p-4"
                 >
-                  <p className="font-medium text-white">{announcement.title}</p>
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="font-medium text-foreground">{announcement.title}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {announcement.authorName ?? 'Admin'} ·{' '}
                     {new Date(announcement.createdAt).toLocaleString('en-PH')}
                   </p>
-                  <p className="mt-3 whitespace-pre-wrap text-sm text-slate-300">
+                  <p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">
                     {announcement.body}
                   </p>
                 </article>
@@ -542,20 +560,20 @@ export default function EmployeePage() {
           <Link
             href="/employee/announcements"
             target="_blank"
-            className="mt-4 inline-block text-sm text-emerald-400 hover:underline"
+            className="mt-4 inline-block text-sm text-primary hover:underline"
           >
             Show all announcements
           </Link>
         </section>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+        <section className="rounded-2xl border border-border bg-card p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
-                <Fingerprint className="size-5 text-emerald-400" />
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                <Fingerprint className="size-5 text-primary" />
                 Biometric clock-in
               </h2>
-              <p className="mt-2 text-sm text-slate-400">
+              <p className="mt-2 text-sm text-muted-foreground">
                 {biometricSupport?.platformAvailable
                   ? biometricStatus?.enrolled
                     ? 'Use Face ID, fingerprint, or Windows Hello when you clock in or out.'
@@ -564,7 +582,7 @@ export default function EmployeePage() {
               </p>
             </div>
             {biometricStatus?.enrolled ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs text-emerald-300">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-3 py-1 text-xs text-primary">
                 <ShieldCheck className="size-3.5" />
                 Enrolled
               </span>
@@ -577,7 +595,7 @@ export default function EmployeePage() {
               loading={biometricLoading}
               loadingText="Setting up…"
               onClick={handleRegisterBiometric}
-              className="mt-6 rounded-lg bg-emerald-500 px-5 py-2.5 font-medium text-slate-950 transition hover:bg-emerald-400"
+              className="mt-6 rounded-lg bg-primary px-5 py-2.5 font-medium text-primary-foreground transition hover:opacity-90"
             >
               <Fingerprint className="size-4" />
               Set up biometrics
@@ -585,11 +603,11 @@ export default function EmployeePage() {
           ) : null}
         </section>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+        <section className="rounded-2xl border border-border bg-card p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-white">Time in / out</h2>
-              <p className="mt-2 text-sm text-slate-400">
+              <h2 className="text-lg font-semibold text-foreground">Time in / out</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
                 {mustEnrollBiometrics
                   ? 'Complete biometric setup above before clocking in or out.'
                   : attendance.isClockedIn
@@ -600,7 +618,7 @@ export default function EmployeePage() {
                       ? 'Clock in with biometrics to start your shift.'
                       : 'You are currently clocked out.'}
               </p>
-              <p className="mt-2 text-sm text-slate-500">
+              <p className="mt-2 text-sm text-muted-foreground">
                 Location is required to clock in or out.
                 {attendance.isClockedIn && attendance.liveTrackingEnabled
                   ? locationSharing
@@ -613,19 +631,19 @@ export default function EmployeePage() {
               <span
                 className={`rounded-full px-3 py-1 text-xs font-medium ${
                   attendance.isClockedIn
-                    ? 'bg-emerald-500/15 text-emerald-300'
-                    : 'bg-slate-800 text-slate-400'
+                    ? 'bg-primary/15 text-primary'
+                    : 'bg-muted text-muted-foreground'
                 }`}
               >
                 {attendance.isClockedIn ? 'On duty' : 'Off duty'}
               </span>
               {elapsedMs !== null && activeClockInAt ? (
                 <div className="text-right">
-                  <p className="text-xs text-slate-500">Time elapsed</p>
-                  <p className="font-mono text-2xl font-semibold tabular-nums text-emerald-300">
+                  <p className="text-xs text-muted-foreground">Time elapsed</p>
+                  <p className="font-mono text-2xl font-semibold tabular-nums text-primary">
                     {formatElapsedDuration(elapsedMs)}
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     Since {formatAttendanceTime(activeClockInAt)}
                   </p>
                 </div>
@@ -640,7 +658,7 @@ export default function EmployeePage() {
               loadingText="Clocking in…"
               disabled={clockLoading || attendance.isClockedIn || mustEnrollBiometrics}
               onClick={() => handleClock('in')}
-              className="rounded-lg bg-emerald-500 px-5 py-2.5 font-medium text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50"
+              className="rounded-lg bg-primary px-5 py-2.5 font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
             >
               <Fingerprint className="size-4" />
               Clock in
@@ -651,7 +669,7 @@ export default function EmployeePage() {
               loadingText="Clocking out…"
               disabled={clockLoading || !attendance.isClockedIn || mustEnrollBiometrics}
               onClick={() => handleClock('out')}
-              className="rounded-lg border border-slate-700 px-5 py-2.5 font-medium text-slate-200 transition hover:border-slate-500 hover:text-white disabled:opacity-50"
+              className="rounded-lg border border-border px-5 py-2.5 font-medium text-foreground transition hover:border-muted-foreground hover:text-foreground disabled:opacity-50"
             >
               <Fingerprint className="size-4" />
               Clock out
@@ -660,24 +678,24 @@ export default function EmployeePage() {
 
           {attendance.todayEvents.length > 0 ? (
             <div className="mt-6 space-y-2">
-              <p className="text-sm font-medium text-slate-300">Today</p>
+              <p className="text-sm font-medium text-muted-foreground">Today</p>
               {attendance.todayEvents.map((event) => (
                 <div
                   key={event.id}
-                  className="flex items-center justify-between rounded-lg bg-slate-950 px-3 py-2 text-sm"
+                  className="flex items-center justify-between rounded-lg bg-background px-3 py-2 text-sm"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="capitalize text-slate-300">
+                    <span className="capitalize text-muted-foreground">
                       {event.type.replace('_', ' ')}
                     </span>
                     {event.biometricVerified ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-300">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
                         <ShieldCheck className="size-3" />
                         Biometric
                       </span>
                     ) : null}
                   </div>
-                  <span className="text-slate-500">
+                  <span className="text-muted-foreground">
                     {formatAttendanceTime(event.recordedAt)}
                   </span>
                 </div>
@@ -686,19 +704,19 @@ export default function EmployeePage() {
           ) : null}
         </section>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+        <section className="rounded-2xl border border-border bg-card p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-white">
+              <h2 className="text-lg font-semibold text-foreground">
                 My daily time records
               </h2>
-              <p className="mt-2 text-sm text-slate-400">
+              <p className="mt-2 text-sm text-muted-foreground">
                 Summaries from your clock in/out events this period.
               </p>
             </div>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-muted-foreground">
               Total:{' '}
-              <span className="font-medium text-white">
+              <span className="font-medium text-foreground">
                 {formatWorkedMinutes(sumWorkedMinutes(dtrRecords))}
               </span>
             </p>
@@ -706,7 +724,7 @@ export default function EmployeePage() {
 
           <div className="mt-6 grid min-w-0 gap-4 sm:grid-cols-2">
             <label className="block min-w-0 space-y-2">
-              <span className="text-sm text-slate-300">From</span>
+              <span className="text-sm text-muted-foreground">From</span>
               <DateInput
                 value={dtrRange.startDate}
                 onChange={(event) =>
@@ -719,7 +737,7 @@ export default function EmployeePage() {
               />
             </label>
             <label className="block min-w-0 space-y-2">
-              <span className="text-sm text-slate-300">To</span>
+              <span className="text-sm text-muted-foreground">To</span>
               <DateInput
                 value={dtrRange.endDate}
                 onChange={(event) =>
@@ -735,26 +753,26 @@ export default function EmployeePage() {
 
           <div className="mt-6 space-y-2">
             {dtrRecords.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-slate-800 px-3 py-4 text-sm text-slate-500">
+              <p className="rounded-lg border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
                 No records for this period.
               </p>
             ) : (
               [...dtrRecords].reverse().map((record) => (
                 <div
                   key={record.date}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-950 px-3 py-3 text-sm"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-background px-3 py-3 text-sm"
                 >
                   <div>
-                    <p className="font-medium text-slate-200">
+                    <p className="font-medium text-foreground">
                       {formatDtrDate(record.date)}
                     </p>
-                    <p className="mt-1 text-slate-500">
+                    <p className="mt-1 text-muted-foreground">
                       {formatDtrTime(record.timeIn)} →{' '}
                       {formatDtrTime(record.timeOut)}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-slate-400">
+                    <span className="text-muted-foreground">
                       {record.workedMinutes > 0
                         ? formatWorkedMinutes(record.workedMinutes)
                         : '—'}
@@ -773,20 +791,20 @@ export default function EmployeePage() {
 
         {attendance?.leaveEnabled ? (
           <>
-            <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-              <h2 className="text-lg font-semibold text-white">Leave balances</h2>
-          <p className="mt-2 text-sm text-slate-400">
+            <section className="rounded-2xl border border-border bg-card p-6">
+              <h2 className="text-lg font-semibold text-foreground">Leave balances</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
             Available days for the current leave period
             {leavePeriodLabel ? ` (${leavePeriodLabel})` : ''}. Unpaid leave
             does not use a balance.
           </p>
 
           {leaveEligibility?.eligible === false ? (
-            <div className="mt-6 rounded-xl border border-dashed border-slate-700 bg-slate-950/60 px-4 py-6 text-center">
-              <p className="font-medium text-white">
+            <div className="mt-6 rounded-xl border border-dashed border-border bg-background/60 px-4 py-6 text-center">
+              <p className="font-medium text-foreground">
                 You are not yet eligible for paid leave
               </p>
-              <p className="mt-2 text-sm text-slate-400">
+              <p className="mt-2 text-sm text-muted-foreground">
                 You have completed {leaveEligibility.tenureMonthsServed} of{' '}
                 {leaveEligibility.tenureMonthsRequired} required month(s) of
                 service
@@ -806,15 +824,15 @@ export default function EmployeePage() {
               return (
                 <article
                   key={leaveType}
-                  className="rounded-xl border border-slate-800 bg-slate-950 p-4"
+                  className="rounded-xl border border-border bg-background p-4"
                 >
-                  <p className="text-sm text-slate-400">
+                  <p className="text-sm text-muted-foreground">
                     {formatLeaveType(leaveType)}
                   </p>
-                  <p className="mt-2 text-2xl font-semibold text-white">
+                  <p className="mt-2 text-2xl font-semibold text-foreground">
                     {balance?.availableDays ?? 0}
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {balance?.usedDays ?? 0} used · {balance?.pendingDays ?? 0}{' '}
                     pending · {balance?.entitledDays ?? 0} total
                     {(balance?.carriedOverDays ?? 0) > 0
@@ -831,29 +849,29 @@ export default function EmployeePage() {
           )}
         </section>
 
-        <section className="min-w-0 rounded-2xl border border-slate-800 bg-slate-900 p-6">
-          <h2 className="text-lg font-semibold text-white">Request leave</h2>
+        <section className="min-w-0 rounded-2xl border border-border bg-card p-6">
+          <h2 className="text-lg font-semibold text-foreground">Request leave</h2>
           {leaveEligibility?.eligible === false ? (
-            <p className="mt-4 text-sm text-slate-400">
+            <p className="mt-4 text-sm text-muted-foreground">
               Paid leave types are unavailable until you complete{' '}
               {leaveEligibility.tenureMonthsRequired} month(s) of service. You can
               still submit an unpaid leave request.
             </p>
           ) : null}
           {selectableLeaveTypes.length === 0 ? (
-            <p className="mt-4 text-sm text-slate-400">
+            <p className="mt-4 text-sm text-muted-foreground">
               You have no leave balance available. Contact HR if you need to
               request time off.
             </p>
           ) : (
             <form className="mt-6 min-w-0 space-y-4" onSubmit={handleLeaveSubmit}>
               <label className="block min-w-0 space-y-2">
-                <span className="text-sm text-slate-300">Leave type</span>
+                <span className="text-sm text-muted-foreground">Leave type</span>
                 <select
                   required
                   value={leaveType}
                   onChange={(event) => setLeaveType(event.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground outline-none ring-ring focus:ring-2"
                 >
                   {selectableLeaveTypes.map((type) => (
                     <option key={type.value} value={type.value}>
@@ -865,7 +883,7 @@ export default function EmployeePage() {
 
             <div className="grid min-w-0 gap-4 sm:grid-cols-2">
               <label className="block min-w-0 space-y-2">
-                <span className="text-sm text-slate-300">Start date</span>
+                <span className="text-sm text-muted-foreground">Start date</span>
                 <DateInput
                   required
                   value={startDate}
@@ -874,7 +892,7 @@ export default function EmployeePage() {
                 />
               </label>
               <label className="block min-w-0 space-y-2">
-                <span className="text-sm text-slate-300">End date</span>
+                <span className="text-sm text-muted-foreground">End date</span>
                 <DateInput
                   required
                   value={endDate}
@@ -885,13 +903,13 @@ export default function EmployeePage() {
             </div>
 
             <label className="block min-w-0 space-y-2">
-              <span className="text-sm text-slate-300">Reason</span>
+              <span className="text-sm text-muted-foreground">Reason</span>
               <textarea
                 required
                 rows={3}
                 value={reason}
                 onChange={(event) => setReason(event.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white outline-none ring-emerald-500 focus:ring-2"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground outline-none ring-ring focus:ring-2"
                 placeholder="Brief reason for your leave request"
               />
             </label>
@@ -900,7 +918,7 @@ export default function EmployeePage() {
               type="submit"
               loading={leaveLoading}
               loadingText="Submitting…"
-              className="rounded-lg bg-emerald-500 px-5 py-2.5 font-medium text-slate-950 transition hover:bg-emerald-400"
+              className="rounded-lg bg-primary px-5 py-2.5 font-medium text-primary-foreground transition hover:opacity-90"
             >
               Submit leave request
             </LoadingButton>
@@ -909,29 +927,29 @@ export default function EmployeePage() {
         </section>
 
         <section>
-          <h2 className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-slate-400">
+          <h2 className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-muted-foreground">
             My leave requests
           </h2>
           <div className="space-y-3">
             {leaveRequests.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-slate-800 p-4 text-sm text-slate-500">
+              <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
                 No leave requests yet.
               </p>
             ) : (
               leaveRequests.map((request) => (
                 <article
                   key={request.id}
-                  className="rounded-xl border border-slate-800 bg-slate-900 p-4"
+                  className="rounded-xl border border-border bg-card p-4"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="font-medium text-white">
+                      <p className="font-medium text-foreground">
                         {formatLeaveType(request.leaveType)}
                       </p>
-                      <p className="mt-1 text-sm text-slate-400">
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {request.startDate} → {request.endDate}
                       </p>
-                      <p className="mt-2 text-sm text-slate-500">{request.reason}</p>
+                      <p className="mt-2 text-sm text-muted-foreground">{request.reason}</p>
                     </div>
                     <span
                       className={`rounded-full px-2.5 py-1 text-xs ${getLeaveStatusClassName(request.status)}`}
@@ -945,7 +963,7 @@ export default function EmployeePage() {
                       loading={cancellingId === request.id}
                       loadingText="Canceling…"
                       onClick={() => handleCancelLeave(request.id)}
-                      className="mt-3 rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:border-slate-500 hover:text-white"
+                      className="mt-3 rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground transition hover:border-muted-foreground hover:text-foreground"
                     >
                       Cancel request
                     </LoadingButton>

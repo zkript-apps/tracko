@@ -8,11 +8,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useSession } from '@/lib/auth-client';
 import {
   cancelPendingSubscriptionChange,
+  cancelPendingSubscriptionScaleChange,
   enableAllFeaturesForDemo,
   formatPhp,
   getOrganizationSubscription,
   scheduleSubscriptionFeatureChange,
+  scheduleSubscriptionScaleChange,
   type BillableFeatureId,
+  type OrganizationScaleTier,
   type OrganizationSubscription,
 } from '@/lib/billing';
 import { isOrgAdminRole } from '@/lib/org-roles';
@@ -25,7 +28,9 @@ export default function SubscriptionSettingsPage() {
   const [subscription, setSubscription] =
     useState<OrganizationSubscription | null>(null);
   const [loadingFeature, setLoadingFeature] = useState<string | null>(null);
+  const [loadingScale, setLoadingScale] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [cancellingScale, setCancellingScale] = useState(false);
   const [demoEnabling, setDemoEnabling] = useState(false);
 
   useEffect(() => {
@@ -66,8 +71,8 @@ export default function SubscriptionSettingsPage() {
       setSubscription(next);
       toast.success(
         action === 'add'
-          ? 'Feature add scheduled for the 1st of next month.'
-          : 'Feature removal scheduled for the 1st of next month.',
+          ? 'Feature add scheduled for 30 days from now.'
+          : 'Feature removal scheduled for 30 days from now.',
       );
     } catch (scheduleError) {
       toast.error(
@@ -77,6 +82,24 @@ export default function SubscriptionSettingsPage() {
       );
     } finally {
       setLoadingFeature(null);
+    }
+  }
+
+  async function handleScheduleScale(scaleTier: OrganizationScaleTier) {
+    setLoadingScale(scaleTier);
+
+    try {
+      const next = await scheduleSubscriptionScaleChange(scaleTier);
+      setSubscription(next);
+      toast.success('Scale change scheduled for 30 days from now.');
+    } catch (scheduleError) {
+      toast.error(
+        scheduleError instanceof Error
+          ? scheduleError.message
+          : 'Unable to update organization scale.',
+      );
+    } finally {
+      setLoadingScale(null);
     }
   }
 
@@ -95,6 +118,24 @@ export default function SubscriptionSettingsPage() {
       );
     } finally {
       setCancellingId(null);
+    }
+  }
+
+  async function handleCancelScale() {
+    setCancellingScale(true);
+
+    try {
+      const next = await cancelPendingSubscriptionScaleChange();
+      setSubscription(next);
+      toast.success('Scheduled scale change canceled.');
+    } catch (cancelError) {
+      toast.error(
+        cancelError instanceof Error
+          ? cancelError.message
+          : 'Unable to cancel scheduled scale change.',
+      );
+    } finally {
+      setCancellingScale(false);
     }
   }
 
@@ -129,14 +170,15 @@ export default function SubscriptionSettingsPage() {
   const optionalFeatures = subscription.features.filter(
     (feature) => feature.optional,
   );
+  const pendingScale = subscription.pendingScaleChange;
 
   return (
     <div className="space-y-8 px-6 py-8">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Subscription</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Manage add-ons for {team.organization.name}. Changes take effect on the
-          1st of each month.
+          Manage scale and add-ons for {team.organization.name}. Changes take
+          effect 30 days after you schedule them.
         </p>
       </div>
 
@@ -177,22 +219,103 @@ export default function SubscriptionSettingsPage() {
             {formatPhp(subscription.projectedMonthlyTotalPhp)}
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
-            Next billing change date:{' '}
+            Next change effective:{' '}
             {subscription.nextChangeEffectiveDateLabel}
           </p>
         </article>
         <article className="rounded-2xl border border-border bg-card p-5 sm:col-span-2 lg:col-span-1">
-          <p className="text-sm text-muted-foreground">Organization scale</p>
-          <p className="mt-2 text-xl font-semibold text-foreground">
-            {subscription.scaleTierLabel}
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {subscription.employeeCount} employees · {subscription.scaleTierRange}
+          <p className="text-sm text-muted-foreground">Employees</p>
+          <p className="mt-2 text-3xl font-semibold text-foreground">
+            {subscription.employeeCount}
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
-            Pricing updates automatically when your employee count changes tier.
+            Current scale: {subscription.scaleTierLabel} (
+            {subscription.scaleTierRange})
           </p>
         </article>
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">
+            Organization scale
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Choose your scale independently. Pricing follows the selected scale,
+            not your employee count.
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {subscription.scaleTiers.map((tier) => {
+            const isCurrent = subscription.scaleTier === tier.id;
+            const isPending = pendingScale?.scaleTier === tier.id;
+
+            return (
+              <article
+                key={tier.id}
+                className={`rounded-2xl border bg-card p-5 ${
+                  isCurrent
+                    ? 'border-primary/40 bg-primary/5'
+                    : 'border-border'
+                }`}
+              >
+                <p className="text-sm text-muted-foreground">
+                  Organization scale
+                </p>
+                <p className="mt-2 text-xl font-semibold text-foreground">
+                  {tier.label}
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {tier.employeeRange}
+                </p>
+                <p className="mt-3 text-sm font-medium text-foreground">
+                  Base {formatPhp(tier.pricing.base)}/mo
+                </p>
+
+                {isCurrent ? (
+                  <p className="mt-3 text-sm text-primary">Current scale</p>
+                ) : isPending ? (
+                  <p className="mt-3 text-sm text-amber-600 dark:text-amber-400">
+                    Scheduled for {pendingScale.effectiveDateLabel}
+                  </p>
+                ) : pendingScale ? (
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    Cancel the pending change to switch here
+                  </p>
+                ) : (
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    Switch takes effect in 30 days
+                  </p>
+                )}
+
+                <div className="mt-4">
+                  {isCurrent ? null : isPending ? (
+                    <LoadingButton
+                      type="button"
+                      variant="outline"
+                      loading={cancellingScale}
+                      loadingText="Canceling…"
+                      onClick={handleCancelScale}
+                    >
+                      Cancel change
+                    </LoadingButton>
+                  ) : (
+                    <LoadingButton
+                      type="button"
+                      variant="outline"
+                      disabled={Boolean(pendingScale)}
+                      loading={loadingScale === tier.id}
+                      loadingText="Scheduling…"
+                      onClick={() => handleScheduleScale(tier.id)}
+                    >
+                      Switch to {tier.label}
+                    </LoadingButton>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
       </section>
 
       <section className="space-y-3">

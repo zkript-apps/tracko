@@ -11,11 +11,11 @@ export function PageLoader({ label = 'Loading…', className }: PageLoaderProps)
     <div
       role="status"
       className={cn(
-        'flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-950 text-slate-400',
+        'flex min-h-screen flex-col items-center justify-center gap-3 bg-background text-muted-foreground',
         className,
       )}
     >
-      <Spinner size="lg" className="text-emerald-400" />
+      <Spinner size="lg" className="text-primary" />
       <p className="text-sm">{label}</p>
     </div>
   );

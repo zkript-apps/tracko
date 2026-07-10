@@ -14,7 +14,7 @@ export function OnboardingSkeleton() {
           <Skeleton className="mx-auto h-4 w-56" />
         </div>
 
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
+        <div className="rounded-2xl border border-border bg-card p-8 shadow-xl">
           <div className="space-y-4">
             {Array.from({ length: 5 }).map((_, index) => (
               <div key={index} className="space-y-2">

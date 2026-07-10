@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
+  Building2,
   CalendarDays,
   CalendarCog,
   ChevronDown,
@@ -14,7 +15,10 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  Moon,
+  Palette,
   PhilippinePeso,
+  Sun,
   UserCog,
   Users,
   CalendarRange,
@@ -34,9 +38,18 @@ import {
   getOrganizationSubscription,
   type BillableFeatureId,
 } from '@/lib/billing';
+import {
+  applyOrgBrandingTheme,
+  clearOrgBrandingTheme,
+  ORG_BRANDING_UPDATED_EVENT,
+  resolveBrandingLogoUrl,
+  type BrandingColors,
+} from '@/lib/branding';
+import { useThemeMode } from '@/components/theme/theme-provider';
 import { formatOrgRole, isHrRole } from '@/lib/org-roles';
 import { cn } from '@/lib/utils';
 import type { TeamOverview } from '@/lib/team';
+import { isOrgAppearanceEnabled } from '@/lib/feature-flags';
 
 type DashboardShellProps = {
   team: TeamOverview;
@@ -184,25 +197,43 @@ function buildNavItems(
   }
 
   if (team.currentMember?.canManageTeam) {
+    const organizationChildren: NavLinkItem[] = [
+      {
+        type: 'link',
+        href: '/dashboard/team',
+        label: 'Team & HR',
+        icon: UserCog,
+      },
+      {
+        type: 'link',
+        href: '/dashboard/settings/branding',
+        label: 'Branding',
+        icon: Building2,
+      },
+    ];
+
+    if (isOrgAppearanceEnabled()) {
+      organizationChildren.push({
+        type: 'link',
+        href: '/dashboard/settings/appearance',
+        label: 'Appearance',
+        icon: Palette,
+      });
+    }
+
+    organizationChildren.push({
+      type: 'link',
+      href: '/dashboard/settings/subscription',
+      label: 'Subscription',
+      icon: CreditCard,
+    });
+
     items.push({
       type: 'group',
       id: 'organization',
       label: 'Organization',
       icon: UserCog,
-      children: [
-        {
-          type: 'link',
-          href: '/dashboard/team',
-          label: 'Team & HR',
-          icon: UserCog,
-        },
-        {
-          type: 'link',
-          href: '/dashboard/settings/subscription',
-          label: 'Subscription',
-          icon: CreditCard,
-        },
-      ],
+      children: organizationChildren,
     });
   }
 
@@ -427,6 +458,29 @@ function NavLinks({
   );
 }
 
+function ThemeModeToggle() {
+  const { themeMode, setThemeMode, isSaving } = useThemeMode();
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      className="w-full justify-start"
+      disabled={isSaving}
+      onClick={() =>
+        void setThemeMode(themeMode === 'dark' ? 'light' : 'dark')
+      }
+    >
+      {themeMode === 'dark' ? (
+        <Sun className="size-4" />
+      ) : (
+        <Moon className="size-4" />
+      )}
+      {themeMode === 'dark' ? 'Light mode' : 'Dark mode'}
+    </Button>
+  );
+}
+
 function SidebarContent({
   team,
   userId,
@@ -434,6 +488,7 @@ function SidebarContent({
   userEmail,
   pathname,
   activeFeatures,
+  logoSrc,
   onNavigate,
   onSignOut,
 }: {
@@ -443,6 +498,7 @@ function SidebarContent({
   userEmail: string;
   pathname: string;
   activeFeatures: BillableFeatureId[];
+  logoSrc: string | null;
   onNavigate?: () => void;
   onSignOut: () => void;
 }) {
@@ -455,14 +511,26 @@ function SidebarContent({
   return (
     <div className="flex h-full flex-col">
       <div className="px-4 py-5">
-        <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">
-          Tracko
-        </p>
-        <p className="mt-2 truncate text-sm font-semibold text-foreground">
-          {team.organization.name}
-        </p>
+        <div className="flex items-center gap-3">
+          {logoSrc ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoSrc}
+              alt={`${team.organization.name} logo`}
+              className="size-9 rounded-lg object-contain"
+            />
+          ) : null}
+          <div className="min-w-0">
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-primary">
+              Tracko
+            </p>
+            <p className="mt-1 truncate text-sm font-semibold text-foreground">
+              {team.organization.name}
+            </p>
+          </div>
+        </div>
         {branch ? (
-          <p className="mt-1 truncate text-xs text-muted-foreground">
+          <p className="mt-2 truncate text-xs text-muted-foreground">
             {branch.name}
           </p>
         ) : null}
@@ -484,6 +552,7 @@ function SidebarContent({
           <p className="truncate text-xs text-muted-foreground">{userEmail}</p>
           <p className="mt-1 text-xs text-primary/80">{formatOrgRole(role)}</p>
         </div>
+        <ThemeModeToggle />
         <Button
           type="button"
           variant="outline"
@@ -509,6 +578,104 @@ export function DashboardShell({
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activeFeatures, setActiveFeatures] = useState<BillableFeatureId[]>([]);
+  const [logoSrc, setLogoSrc] = useState<string | null>(null);
+  const [activeBranding, setActiveBranding] = useState<BrandingColors | null>(
+    team.organization.branding
+      ? {
+          primaryColor: team.organization.branding.primaryColor,
+          secondaryColor: team.organization.branding.secondaryColor,
+          accentColor: team.organization.branding.accentColor,
+        }
+      : null,
+  );
+  const [activeLogoUrl, setActiveLogoUrl] = useState<string | null>(
+    team.organization.branding?.logoUrl ?? null,
+  );
+
+  useEffect(() => {
+    if (!isOrgAppearanceEnabled()) {
+      return;
+    }
+
+    if (activeBranding) {
+      applyOrgBrandingTheme(activeBranding);
+    }
+  }, [activeBranding]);
+
+  useEffect(() => {
+    function handleBrandingUpdated(event: Event) {
+      const detail = (event as CustomEvent<BrandingColors & {
+        hasLogo?: boolean;
+        logoUrl?: string | null;
+      }>).detail;
+
+      if (!detail) {
+        return;
+      }
+
+      setActiveBranding({
+        primaryColor: detail.primaryColor,
+        secondaryColor: detail.secondaryColor,
+        accentColor: detail.accentColor,
+      });
+
+      if ('logoUrl' in detail) {
+        setActiveLogoUrl(detail.logoUrl ?? null);
+      }
+    }
+
+    window.addEventListener(ORG_BRANDING_UPDATED_EVENT, handleBrandingUpdated);
+    return () => {
+      window.removeEventListener(
+        ORG_BRANDING_UPDATED_EVENT,
+        handleBrandingUpdated,
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    const logoUrl = activeLogoUrl;
+    let objectUrl: string | null = null;
+    let cancelled = false;
+
+    if (!logoUrl) {
+      setLogoSrc(null);
+      return;
+    }
+
+    const resolved = resolveBrandingLogoUrl(logoUrl);
+
+    if (!resolved) {
+      setLogoSrc(null);
+      return;
+    }
+
+    void fetch(resolved, { credentials: 'include' })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error('Unable to load logo.');
+        }
+
+        const blob = await response.blob();
+        objectUrl = URL.createObjectURL(blob);
+
+        if (!cancelled) {
+          setLogoSrc(objectUrl);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLogoSrc(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [activeLogoUrl]);
 
   useEffect(() => {
     if (!team.currentMember?.canManageTeam && team.currentMember?.role !== 'hr') {
@@ -525,6 +692,7 @@ export function DashboardShell({
   }, [team]);
 
   async function handleSignOut() {
+    clearOrgBrandingTheme();
     await signOut();
     router.push('/sign-in');
     router.refresh();
@@ -545,6 +713,7 @@ export function DashboardShell({
           userEmail={userEmail}
           pathname={pathname}
           activeFeatures={activeFeatures}
+          logoSrc={logoSrc}
           onSignOut={handleSignOut}
         />
       </aside>
@@ -569,6 +738,7 @@ export function DashboardShell({
                 userEmail={userEmail}
                 pathname={pathname}
                 activeFeatures={activeFeatures}
+                logoSrc={logoSrc}
                 onNavigate={() => setMobileOpen(false)}
                 onSignOut={handleSignOut}
               />
