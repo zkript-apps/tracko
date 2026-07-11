@@ -47,6 +47,11 @@ export class BillingController {
     return this.billing.getSubscriptionForRequest(request);
   }
 
+  @Get('billing/access-status')
+  getAccessStatus(@Req() request: Request) {
+    return this.billing.getAccessStatusForRequest(request);
+  }
+
   @Post('billing/features')
   scheduleFeatureChange(
     @Req() request: Request,

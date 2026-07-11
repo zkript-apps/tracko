@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Param,
   Post,
   Req,
 } from '@nestjs/common';
@@ -17,6 +18,10 @@ class CreateAdminInviteDto {
   email!: string;
   planTier!: PlanTier;
   paymentReference?: string;
+}
+
+class RejectInquiryDto {
+  reason?: string;
 }
 
 @Controller('platform')
@@ -67,5 +72,48 @@ export class PlatformController {
       planTier: body.planTier,
       paymentReference: body.paymentReference?.trim(),
     });
+  }
+
+  @Get('subscription-inquiries')
+  listSubscriptionInquiries(@Req() request: Request) {
+    return this.platform.listSubscriptionInquiries(request);
+  }
+
+  @Post('subscription-inquiries/:id/approve')
+  approveSubscriptionInquiry(
+    @Req() request: Request,
+    @Param('id') id: string,
+  ) {
+    return this.platform.approveSubscriptionInquiry(request, id);
+  }
+
+  @Post('subscription-inquiries/:id/reject')
+  rejectSubscriptionInquiry(
+    @Req() request: Request,
+    @Param('id') id: string,
+    @Body() body: RejectInquiryDto,
+  ) {
+    return this.platform.rejectSubscriptionInquiry(request, id, body.reason);
+  }
+
+  @Get('subscriptions/pending')
+  listPendingSubscriptions(@Req() request: Request) {
+    return this.platform.listPendingSubscriptions(request);
+  }
+
+  @Post('subscriptions/:organizationId/activate')
+  activateSubscription(
+    @Req() request: Request,
+    @Param('organizationId') organizationId: string,
+  ) {
+    return this.platform.activateSubscription(request, organizationId);
+  }
+
+  @Post('subscriptions/:organizationId/reject')
+  rejectSubscription(
+    @Req() request: Request,
+    @Param('organizationId') organizationId: string,
+  ) {
+    return this.platform.rejectSubscription(request, organizationId);
   }
 }

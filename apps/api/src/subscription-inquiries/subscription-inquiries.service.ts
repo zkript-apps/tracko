@@ -108,8 +108,8 @@ export class SubscriptionInquiriesService {
     await sendEmail({
       to: email,
       subject: 'We received your Tracko subscription request',
-      text: `Hi ${contactName},\n\nThanks for your interest in Tracko. Our team will contact you at ${email} or ${phone} with next steps.\n\nOrganization scale: ${scaleDefinition.label} (${scaleDefinition.employeeRange})\nEstimated monthly total: PHP ${estimatedTotal}.`,
-      html: `<p>Hi ${contactName},</p><p>Thanks for your interest in Tracko. Our team will contact you at <strong>${email}</strong> or <strong>${phone}</strong> with next steps.</p><p>Organization scale: <strong>${scaleDefinition.label}</strong> (${scaleDefinition.employeeRange})</p><p>Estimated monthly total: <strong>PHP ${estimatedTotal}</strong>.</p>`,
+      text: `Hi ${contactName},\n\nThanks for your interest in Tracko. Our team will review your request and contact you at ${email} or ${phone} with next steps.\n\nOrganization scale: ${scaleDefinition.label} (${scaleDefinition.employeeRange})\nEstimated monthly total: PHP ${estimatedTotal}.`,
+      html: `<p>Hi ${contactName},</p><p>Thanks for your interest in Tracko. Our team will review your request and contact you at <strong>${email}</strong> or <strong>${phone}</strong> with next steps.</p><p>Organization scale: <strong>${scaleDefinition.label}</strong> (${scaleDefinition.employeeRange})</p><p>Estimated monthly total: <strong>PHP ${estimatedTotal}</strong>.</p>`,
     });
 
     return {

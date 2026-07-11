@@ -22,6 +22,12 @@ export interface PendingScaleChange {
   requestedByUserId: string;
 }
 
+export type OrganizationSubscriptionStatus =
+  | 'pending'
+  | 'active'
+  | 'rejected'
+  | 'cancelled';
+
 export interface OrganizationSubscription {
   _id: string;
   organizationId: string;
@@ -30,7 +36,7 @@ export interface OrganizationSubscription {
   activeFeatures: BillableFeatureId[];
   pendingChanges: PendingSubscriptionChange[];
   pendingScaleChange: PendingScaleChange | null;
-  status: 'active' | 'cancelled';
+  status: OrganizationSubscriptionStatus;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -74,6 +80,7 @@ export async function findSubscriptionByOrganizationId(
     ...subscription,
     scaleTier: subscription.scaleTier ?? 'small',
     pendingScaleChange: subscription.pendingScaleChange ?? null,
+    status: subscription.status ?? 'active',
     hasStoredScaleTier,
   };
 }
@@ -82,6 +89,7 @@ export async function createOrganizationSubscription(input: {
   organizationId: string;
   activeFeatures?: BillableFeatureId[];
   scaleTier?: OrganizationScaleTier;
+  status?: OrganizationSubscriptionStatus;
 }): Promise<OrganizationSubscription> {
   await ensureSubscriptionIndexes();
   const collection = await getCollection();
@@ -94,13 +102,20 @@ export async function createOrganizationSubscription(input: {
     activeFeatures: input.activeFeatures ?? [],
     pendingChanges: [],
     pendingScaleChange: null,
-    status: 'active',
+    status: input.status ?? 'pending',
     createdAt: now,
     updatedAt: now,
   };
 
   await collection.insertOne(subscription);
   return subscription;
+}
+
+export async function listSubscriptionsByStatus(
+  status: OrganizationSubscriptionStatus,
+): Promise<OrganizationSubscription[]> {
+  const collection = await getCollection();
+  return collection.find({ status }).sort({ createdAt: -1 }).toArray();
 }
 
 export async function saveOrganizationSubscription(

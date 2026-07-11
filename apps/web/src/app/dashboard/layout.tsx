@@ -8,6 +8,7 @@ import { DashboardSkeleton } from '@/components/ui/dashboard-skeleton';
 import { useSession } from '@/lib/auth-client';
 import { getOnboardingStatus } from '@/lib/onboarding';
 import { isEmployeeRole } from '@/lib/org-roles';
+import { getSubscriptionAccessStatus } from '@/lib/platform';
 import { getTeamOverview, type TeamOverview } from '@/lib/team';
 
 export default function DashboardLayout({
@@ -37,7 +38,14 @@ export default function DashboardLayout({
           return;
         }
 
-        return getTeamOverview();
+        return getSubscriptionAccessStatus().then((access) => {
+          if (!access.isAccessAllowed) {
+            router.replace('/subscription-pending');
+            return null;
+          }
+
+          return getTeamOverview();
+        });
       })
       .then((overview) => {
         if (!overview) {

@@ -7,6 +7,7 @@ export interface AdminInvitation {
   token: string;
   email: string;
   planTier: PlanTier;
+  selectedFeatures: string[];
   status: AdminInvitationStatus;
   paymentReference?: string;
   paidAt: Date;
@@ -14,10 +15,13 @@ export interface AdminInvitation {
   createdAt: Date;
   usedAt?: Date;
   userId?: string;
+  inquiryId?: string;
 }
 
 export interface CreateAdminInvitationInput {
   email: string;
   planTier: PlanTier;
   paymentReference?: string;
+  selectedFeatures?: string[];
+  inquiryId?: string;
 }

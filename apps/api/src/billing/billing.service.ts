@@ -17,6 +17,7 @@ import {
 } from './feature-catalog';
 import {
   isOrganizationScaleTier,
+  type OrganizationScaleTier,
 } from './organization-scale';
 import { OrganizationScaleService } from './organization-scale.service';
 import { formatEffectiveDate, getChangeEffectiveDate } from './billing.util';
@@ -413,7 +414,11 @@ export class BillingService {
 
   async seedSubscriptionForOrganization(
     organizationId: string,
-    activeFeatures: BillableFeatureId[] = [],
+    input: {
+      activeFeatures?: BillableFeatureId[];
+      scaleTier?: OrganizationScaleTier;
+      status?: 'pending' | 'active' | 'rejected' | 'cancelled';
+    } = {},
   ) {
     const existing = await findSubscriptionByOrganizationId(organizationId);
     if (existing) {
@@ -424,7 +429,34 @@ export class BillingService {
 
     return createOrganizationSubscription({
       organizationId,
-      activeFeatures,
+      activeFeatures: input.activeFeatures ?? [],
+      scaleTier: input.scaleTier,
+      status: input.status ?? 'pending',
+    });
+  }
+
+  async getAccessStatusForRequest(request: Request) {
+    const context = await this.workforce.getMemberContext(request);
+    const subscription = await this.getOrCreateSubscription(
+      context.organizationId,
+    );
+
+    return {
+      organizationId: context.organizationId,
+      status: subscription.status,
+      isAccessAllowed: subscription.status === 'active',
+      scaleTier: subscription.scaleTier,
+    };
+  }
+
+  async setSubscriptionStatus(
+    organizationId: string,
+    status: 'pending' | 'active' | 'rejected' | 'cancelled',
+  ) {
+    const subscription = await this.getOrCreateSubscription(organizationId);
+    return saveOrganizationSubscription({
+      ...subscription,
+      status,
     });
   }
 }

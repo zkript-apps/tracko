@@ -1,6 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { AuthService } from '@thallesp/nestjs-better-auth';
+import { findInvitationByUserId } from '../admin-invitations/admin-invitations.store';
+import { isBillableFeatureId } from '../billing/feature-catalog';
 import { BillingService } from '../billing/billing.service';
+import type { OrganizationScaleTier } from '../billing/organization-scale';
+import {
+  DEFAULT_LEAVE_POLICY,
+  type LeavePolicyInput,
+} from '../workforce/leave/leave-policy.types';
+import { upsertLeavePolicy } from '../workforce/leave/leave-policy.store';
 import {
   createBranchesForOrganization,
   listBranchesByOrganization,
@@ -18,6 +26,20 @@ type OrganizationRecord = {
   slug: string;
   onboardingCompleted?: boolean;
 };
+
+function normalizeLeavePolicyInput(
+  input: NonNullable<CompleteOnboardingInput['leavePolicy']>,
+): LeavePolicyInput {
+  return {
+    resetType: input.resetType,
+    fiscalYearStartMonth: input.fiscalYearStartMonth,
+    silSafeguard: input.silSafeguard,
+    periodAutoGrant: input.periodAutoGrant,
+    accrual: input.accrual,
+    vacation: input.vacation ?? DEFAULT_LEAVE_POLICY.vacation,
+    sick: input.sick ?? DEFAULT_LEAVE_POLICY.sick,
+  };
+}
 
 @Injectable()
 export class OnboardingService {
@@ -87,6 +109,7 @@ export class OnboardingService {
   }
 
   async complete(headers: HeadersInit, input: CompleteOnboardingInput) {
+    const session = await this.authService.api.getSession({ headers });
     const slug = input.slug?.trim() || slugifyOrganizationName(input.name);
     const branding = normalizeOrgBranding(input.branding);
 
@@ -119,7 +142,30 @@ export class OnboardingService {
       input.branches,
     );
 
-    await this.billing.seedSubscriptionForOrganization(organization.id);
+    const invitation = session?.user?.id
+      ? await findInvitationByUserId(session.user.id)
+      : null;
+    const scaleTier = (invitation?.planTier ??
+      'small') as OrganizationScaleTier;
+    const fromInput = (input.selectedFeatures ?? []).filter(isBillableFeatureId);
+    const fromInvitation = (invitation?.selectedFeatures ?? []).filter(
+      isBillableFeatureId,
+    );
+    const activeFeatures =
+      fromInput.length > 0 ? fromInput : fromInvitation;
+
+    await this.billing.seedSubscriptionForOrganization(organization.id, {
+      scaleTier,
+      activeFeatures,
+      status: 'pending',
+    });
+
+    if (input.leavePolicy && activeFeatures.includes('leave')) {
+      await upsertLeavePolicy(
+        organization.id,
+        normalizeLeavePolicyInput(input.leavePolicy),
+      );
+    }
 
     return {
       organization,

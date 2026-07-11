@@ -4,6 +4,8 @@ import type { BillableFeatureId } from '../billing/feature-catalog.types';
 import { isBillableFeatureId } from '../billing/feature-catalog';
 import type { OrganizationScaleTier } from '../billing/organization-scale';
 
+export type SubscriptionInquiryStatus = 'pending' | 'approved' | 'rejected';
+
 export interface SubscriptionInquiry {
   _id: string;
   companyName: string;
@@ -14,6 +16,11 @@ export interface SubscriptionInquiry {
   employeeCount: number;
   scaleTier: OrganizationScaleTier;
   selectedFeatures: BillableFeatureId[];
+  status: SubscriptionInquiryStatus;
+  adminInvitationToken?: string | null;
+  reviewedAt?: Date | null;
+  reviewedByUserId?: string | null;
+  rejectionReason?: string | null;
   createdAt: Date;
 }
 
@@ -53,11 +60,66 @@ export async function createSubscriptionInquiry(input: {
     employeeCount: input.employeeCount,
     scaleTier: input.scaleTier,
     selectedFeatures: input.selectedFeatures,
+    status: 'pending',
+    adminInvitationToken: null,
+    reviewedAt: null,
+    reviewedByUserId: null,
+    rejectionReason: null,
     createdAt: new Date(),
   };
 
   await collection.insertOne(inquiry);
   return inquiry;
+}
+
+export async function listSubscriptionInquiries(): Promise<SubscriptionInquiry[]> {
+  const collection = await getCollection();
+  const inquiries = await collection.find({}).sort({ createdAt: -1 }).toArray();
+
+  return inquiries.map((inquiry) => ({
+    ...inquiry,
+    status: inquiry.status ?? 'pending',
+  }));
+}
+
+export async function findSubscriptionInquiryById(
+  id: string,
+): Promise<SubscriptionInquiry | null> {
+  const collection = await getCollection();
+  const inquiry = await collection.findOne({ _id: String(id) });
+
+  if (!inquiry) {
+    return null;
+  }
+
+  return {
+    ...inquiry,
+    status: inquiry.status ?? 'pending',
+  };
+}
+
+export async function updateSubscriptionInquiry(
+  id: string,
+  update: Partial<
+    Pick<
+      SubscriptionInquiry,
+      | 'status'
+      | 'adminInvitationToken'
+      | 'reviewedAt'
+      | 'reviewedByUserId'
+      | 'rejectionReason'
+    >
+  >,
+): Promise<SubscriptionInquiry | null> {
+  const collection = await getCollection();
+  await collection.updateOne(
+    { _id: String(id) },
+    {
+      $set: update,
+    },
+  );
+
+  return findSubscriptionInquiryById(id);
 }
 
 export function parseSelectedFeatures(

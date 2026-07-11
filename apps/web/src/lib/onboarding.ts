@@ -1,7 +1,8 @@
 import { apiFetch } from './api';
 import { getSession } from './auth-client';
+import { getSubscriptionAccessStatus } from './platform';
 import { getTeamOverview } from './team';
-import { getPostInvitePath, isEmployeeRole, isOrgAdminRole, isSuperAdminRole } from './org-roles';
+import { getPostInvitePath, isEmployeeRole, isSuperAdminRole } from './org-roles';
 
 export type OnboardingStatus = {
   needsOnboarding: boolean;
@@ -24,8 +25,21 @@ export async function getOnboardingStatus(): Promise<OnboardingStatus> {
   return apiFetch('/onboarding/status');
 }
 
+function isOrgAdminPlatformUser(platformRole: string | null | undefined) {
+  return (
+    !platformRole ||
+    platformRole === 'org_admin' ||
+    platformRole === 'owner' ||
+    platformRole === 'admin'
+  );
+}
+
 export async function getPostAuthPath(): Promise<
-  '/onboarding' | '/dashboard' | '/employee' | '/platform'
+  | '/onboarding'
+  | '/dashboard'
+  | '/employee'
+  | '/platform'
+  | '/subscription-pending'
 > {
   const sessionResult = await getSession();
   const platformRole = (
@@ -46,12 +60,19 @@ export async function getPostAuthPath(): Promise<
 
   const status = await getOnboardingStatus();
 
-  if (status.needsOnboarding && isOrgAdminRole(platformRole ?? 'org_admin')) {
+  if (status.needsOnboarding && isOrgAdminPlatformUser(platformRole)) {
     return '/onboarding';
   }
 
-  if (status.needsOnboarding && !platformRole) {
-    return '/onboarding';
+  if (isOrgAdminPlatformUser(platformRole)) {
+    try {
+      const access = await getSubscriptionAccessStatus();
+      if (!access.isAccessAllowed) {
+        return '/subscription-pending';
+      }
+    } catch {
+      // If access status is unavailable, fall through to normal routing.
+    }
   }
 
   try {
@@ -88,6 +109,9 @@ export async function validateInvitationToken(
   return apiFetch(`/admin-invitations/validate?token=${encodeURIComponent(token)}`);
 }
 
+import type { BillableFeatureId } from './billing';
+import type { LeavePolicy } from './leave-policy';
+
 export type BranchInput = {
   name: string;
   address?: string;
@@ -103,11 +127,13 @@ export type CompleteOnboardingInput = {
   address?: string;
   city?: string;
   phone?: string;
+  selectedFeatures?: BillableFeatureId[];
   branding?: {
     primaryColor?: string;
     secondaryColor?: string;
     accentColor?: string;
   };
+  leavePolicy?: Omit<LeavePolicy, 'updatedAt'>;
   branches: BranchInput[];
 };
 

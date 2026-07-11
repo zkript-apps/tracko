@@ -55,11 +55,13 @@ export async function createAdminInvitation(
     token: createToken(),
     email,
     planTier: input.planTier,
+    selectedFeatures: input.selectedFeatures ?? [],
     status: 'pending',
     paymentReference: input.paymentReference,
     paidAt: now,
     expiresAt: invitationExpiryDate(),
     createdAt: now,
+    inquiryId: input.inquiryId,
   };
 
   await collection.insertOne(invitation);
@@ -108,6 +110,13 @@ export async function validateAdminInvitation(
   }
 
   return invitation;
+}
+
+export async function findInvitationByUserId(
+  userId: string,
+): Promise<AdminInvitation | null> {
+  const collection = await getCollection();
+  return collection.findOne({ userId: String(userId) });
 }
 
 export async function markInvitationUsed(
